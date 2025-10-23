@@ -8,6 +8,7 @@ from simulator.event_simulator.compute_node import InferenceSettings
 from simulator.model_manager.example_small.example_small import ExampleSmallStatistics
 from simulator.model_manager.example_large.example_large import ExampleLargeStatistics
 from simulator.model_manager.llama2_70b.llama2_70b import LLaMa70BStatistics
+from simulator.model_manager.llama2_13b.llama2_13b import LLaMa13BStatistics
 from simulator.model_manager.llama1_30b.llama1_30b import LLaMa30BStatistics
 
 
@@ -17,6 +18,7 @@ class ModelName(Enum):
     ExampleLarge = "ModelName.ExampleLarge"
     # ------------------ Real Models ----------------- #
     LLaMa70B = "ModelName.LLaMa70B"
+    LLaMa13B = "ModelName.LLaMa13B"
     LLaMa30B = "ModelName.LLaMa30B"
 
 
@@ -41,6 +43,8 @@ class ModelManager:
             self.model_statistics = ExampleLargeStatistics()
         elif self.model_name == ModelName.LLaMa70B:
             self.model_statistics = LLaMa70BStatistics(num_machines_dict=machine_num_dict)
+        elif self.model_name == ModelName.LLaMa13B:
+            self.model_statistics = LLaMa13BStatistics(num_machines_dict=machine_num_dict)
         elif self.model_name == ModelName.LLaMa30B:
             self.model_statistics = LLaMa30BStatistics(num_machines_dict=machine_num_dict)
         else:

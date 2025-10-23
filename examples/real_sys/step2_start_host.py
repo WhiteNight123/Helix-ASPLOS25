@@ -12,14 +12,14 @@ def example_maxflow_offline():
     print("Running example: maxflow host + offline mode")
     run_maxflow_host_offline(
         # model and machine
-        machine_num_dict={"A100": 4, "L4": 8, "T4": 12},
-        model_name=ModelName.LLaMa70B,
+        machine_num_dict={"RTX2080Ti": 4},
+        model_name=ModelName.LLaMa13B,
         # cluster
-        complete_cluster_file_name="./config/single24.ini",
+        complete_cluster_file_name="./config/single4.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
-        solution_file_name="./layout/ilp_sol.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster.ini",
+        solution_file_name="./layout/ilp_sol_4gpu.ini",
+        simulator_cluster_file_name="./layout/simulator_cluster_4gpu.ini",
         real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
@@ -35,14 +35,14 @@ def example_maxflow_online():
     print("Running example: maxflow host + online mode")
     run_maxflow_host_online(
         # model and machine
-        machine_num_dict={"A100": 4, "L4": 8, "T4": 12},
-        model_name=ModelName.LLaMa70B,
+        machine_num_dict={"RTX2080Ti": 4},
+        model_name=ModelName.LLaMa13B,
         # cluster
-        complete_cluster_file_name="./config/single24.ini",
+        complete_cluster_file_name="./config/single4.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
-        solution_file_name="./layout/ilp_sol.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster.ini",
+        solution_file_name="./layout/ilp_sol_4gpu.ini",
+        simulator_cluster_file_name="./layout/simulator_cluster_4gpu.ini",
         real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,

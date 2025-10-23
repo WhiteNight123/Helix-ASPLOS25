@@ -132,25 +132,25 @@ def main():
     parse_result(file_name="./result/maxflow_offline/events.txt", warm_up_time=60, finish_time=300)
     print()
 
-    # swarm + online
-    print("Swarm + Online:")
-    parse_result(file_name="./result/swarm_online/events.txt", warm_up_time=60, finish_time=300)
-    print()
+    # # swarm + online
+    # print("Swarm + Online:")
+    # parse_result(file_name="./result/swarm_online/events.txt", warm_up_time=60, finish_time=300)
+    # print()
 
-    # swarm + offline
-    print("Swarm + Offline:")
-    parse_result(file_name="./result/swarm_offline/events.txt", warm_up_time=60, finish_time=300)
-    print()
+    # # swarm + offline
+    # print("Swarm + Offline:")
+    # parse_result(file_name="./result/swarm_offline/events.txt", warm_up_time=60, finish_time=300)
+    # print()
 
-    # random + online
-    print("Random + Online:")
-    parse_result(file_name="./result/random_online/events.txt", warm_up_time=60, finish_time=300)
-    print()
+    # # random + online
+    # print("Random + Online:")
+    # parse_result(file_name="./result/random_online/events.txt", warm_up_time=60, finish_time=300)
+    # print()
 
-    # random + offline
-    print("Random + Offline:")
-    parse_result(file_name="./result/random_offline/events.txt", warm_up_time=60, finish_time=300)
-    print()
+    # # random + offline
+    # print("Random + Offline:")
+    # parse_result(file_name="./result/random_offline/events.txt", warm_up_time=60, finish_time=300)
+    # print()
 
 
 if __name__ == '__main__':

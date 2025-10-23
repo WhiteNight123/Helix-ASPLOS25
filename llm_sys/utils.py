@@ -15,7 +15,7 @@ def to_real(node_id: int) -> int:
         return node_id - SIMULATOR_NODE_OFFSET
 
 
-CONFIG_BROADCAST_ADDR = "tcp://10.128.0.31:5000"
+CONFIG_BROADCAST_ADDR = "tcp://10.202.210.104:5000"
 
 
 def warm_up():

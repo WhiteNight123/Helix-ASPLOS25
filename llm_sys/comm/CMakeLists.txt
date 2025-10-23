@@ -15,7 +15,7 @@ find_package(pybind11 REQUIRED)
 
 # Find the PyTorch package
 # Note: This is torch.utils.cmake_prefix_path in python.
-list(APPEND CMAKE_PREFIX_PATH "~/miniconda3/envs/runtime/lib/python3.10/site-packages/torch/share/cmake")
+list(APPEND CMAKE_PREFIX_PATH "~/miniconda3/envs/helix/lib/python3.10/site-packages/torch/share/cmake")
 find_package(Torch REQUIRED)
 
 # Find libtorch_python.so, this is not included in the torch package by default

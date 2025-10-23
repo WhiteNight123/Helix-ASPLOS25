@@ -31,6 +31,7 @@ ACT_SLOW_LINK = 200
 
 # Model
 LLaMa2_70B_TOTAL_LAYERS = 80
+LLaMa2_13B_TOTAL_LAYERS = 40
 LLaMa1_30B_TOTAL_LAYERS = 60
 
 # Dataset (Should not be changed)

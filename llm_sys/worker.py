@@ -79,21 +79,33 @@ def run_and_submit(engine, start_idx, end_idx, is_last_layer, hidden_size, force
     return parsed_prompt
 
 
-def run_worker(scheduling_method: str, model_name: str, vram_usage=0.8):
+def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.8):
     # warm up gpu and initialize llm_sys
+    print("[Python] Starting worker initialization...")
     utils.warm_up()
-    worker_ip: str = utils.get_local_ip()
-    assert worker_ip.startswith("10"), "Local IP must start with 10"
+    print("[Python] GPU warm-up completed.")
+    
+    if worker_ip is None:
+        worker_ip: str = utils.get_local_ip()
+        assert worker_ip.startswith("10"), "Local IP must start with 10"
+    
+    print(f"[Python] Starting network threads with IP: {worker_ip}")
     llm_worker.start_network_threads(utils.CONFIG_BROADCAST_ADDR, worker_ip, scheduling_method)
+    print("[Python] Network threads started, getting model layer indices...")
+    
     start_idx, end_idx, is_last_layer = llm_worker.get_model_start_end_idx()
     print(f"[Python] Cluster initialization finished!")
     print(f"[Python] Model layers: [{start_idx}, {end_idx}).")
     print(f"[Python] Does this node output the last layer: {is_last_layer}.")
 
     # init vllm
+    print(f"[Python] Initializing vLLM engine for layers {start_idx} to {end_idx}...")
     layer_ids = list(range(start_idx, end_idx))
     engine: PipelineStageEngine = init_engine(layer_ids, model_name, vram_usage=vram_usage)
     hidden_size = engine.model_config.get_hidden_size()
+    print(f"[Python] vLLM engine initialized successfully! Hidden size: {hidden_size}")
+    print(f"[Python] Entering main inference loop...")
+
 
     last_log_time = time.time()
     while True:
