@@ -15,6 +15,7 @@ from llm_sys.engine.common import PipelineSequence, PipelineSequenceData, Pipeli
 from llm_sys.engine.scheduler import LayerwiseScheduler
 from llm_sys.engine.exec_engine import PipelineStageEngine
 import llm_sys.engine.llama
+import llm_sys.engine.qwen2
 
 import llm_sys.utils as utils
 
@@ -22,8 +23,8 @@ import llm_sys.utils as utils
 def init_engine(layer_ids, model_name, vram_usage=0.8):
     engine_args = EngineArgs(model=model_name, block_size=16,
                              load_format="dummy", enforce_eager=True,
-                             swap_space=32, max_num_batched_tokens=4096,
-                             gpu_memory_utilization=vram_usage)
+                             swap_space=8, max_num_batched_tokens=4096,
+                             gpu_memory_utilization=vram_usage, dtype="float16")
 
     engine = PipelineStageEngine.from_engine_args(engine_args, layer_ids)
     return engine
