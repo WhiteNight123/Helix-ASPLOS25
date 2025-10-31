@@ -124,12 +124,12 @@ def main():
     """
     # maxflow + online
     print("MaxFlow + Online:")
-    parse_result(file_name="./result/qwen14b_maxflow_online/events.txt", warm_up_time=60, finish_time=300)
+    parse_result(file_name="./result/qwen32b_maxflow_online/events.txt", warm_up_time=60, finish_time=300)
     print()
 
     # maxflow + offline
     print("MaxFlow + Offline:")
-    parse_result(file_name="./result/qwen14b_maxflow_offline/events.txt", warm_up_time=60, finish_time=300)
+    parse_result(file_name="./result/qwen32b_maxflow_offline/events.txt", warm_up_time=60, finish_time=300)
     print()
 
     # # swarm + online

@@ -11,6 +11,7 @@ from simulator.model_manager.llama2_70b.llama2_70b import LLaMa70BStatistics
 from simulator.model_manager.llama2_13b.llama2_13b import LLaMa13BStatistics
 from simulator.model_manager.llama1_30b.llama1_30b import LLaMa30BStatistics
 from simulator.model_manager.qwen2_5_14b.qwen2_5_14b import Qwen14BStatistics
+from simulator.model_manager.qwen3_32b.qwen3_32b import Qwen32BStatistics
 
 
 class ModelName(Enum):
@@ -22,6 +23,7 @@ class ModelName(Enum):
     LLaMa13B = "ModelName.LLaMa13B"
     LLaMa30B = "ModelName.LLaMa30B"
     Qwen14B = "ModelName.Qwen14B"
+    Qwen32B = "ModelName.Qwen32B"
 
 
 class ModelManager:
@@ -51,6 +53,8 @@ class ModelManager:
             self.model_statistics = LLaMa30BStatistics(num_machines_dict=machine_num_dict)
         elif self.model_name == ModelName.Qwen14B:
             self.model_statistics = Qwen14BStatistics(num_machines_dict=machine_num_dict)
+        elif self.model_name == ModelName.Qwen32B:
+            self.model_statistics = Qwen32BStatistics(num_machines_dict=machine_num_dict)
         else:
             assert False, "Unknown model name!"
 

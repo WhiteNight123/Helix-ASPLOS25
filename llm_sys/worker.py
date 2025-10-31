@@ -14,13 +14,14 @@ from vllm import SamplingParams
 from llm_sys.engine.common import PipelineSequence, PipelineSequenceData, PipelineStageOut
 from llm_sys.engine.scheduler import LayerwiseScheduler
 from llm_sys.engine.exec_engine import PipelineStageEngine
-import llm_sys.engine.llama
-import llm_sys.engine.qwen2
+# import llm_sys.engine.llama
+# import llm_sys.engine.qwen2
+import llm_sys.engine.qwen3
 
 import llm_sys.utils as utils
 
 
-def init_engine(layer_ids, model_name, vram_usage=0.8):
+def init_engine(layer_ids, model_name, vram_usage=0.95):
     engine_args = EngineArgs(model=model_name, block_size=16,
                              load_format="dummy", enforce_eager=True,
                              swap_space=8, max_num_batched_tokens=4096,
@@ -80,7 +81,7 @@ def run_and_submit(engine, start_idx, end_idx, is_last_layer, hidden_size, force
     return parsed_prompt
 
 
-def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.8):
+def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.95):
     # warm up gpu and initialize llm_sys
     print("[Python] Starting worker initialization...")
     utils.warm_up()

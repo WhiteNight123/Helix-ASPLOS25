@@ -18,7 +18,7 @@ def example_maxflow_offline():
         complete_cluster_file_name="./config/single4.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
-        solution_file_name="./layout/ilp_sol_4gpu.ini",
+        solution_file_name="./layout/ilp_sol_llama13b_4gpu.ini",
         simulator_cluster_file_name="./layout/simulator_cluster_4gpu.ini",
         real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
@@ -41,7 +41,7 @@ def example_maxflow_online():
         complete_cluster_file_name="./config/single4.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
-        solution_file_name="./layout/ilp_sol_4gpu.ini",
+        solution_file_name="./layout/ilp_sol_llama13b_4gpu.ini",
         simulator_cluster_file_name="./layout/simulator_cluster_4gpu.ini",
         real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput

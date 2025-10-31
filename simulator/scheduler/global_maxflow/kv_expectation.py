@@ -188,7 +188,7 @@ class KVExpectation:
                 free_kv_entries[layer_id] += cur_free_entries
                 total_kv_entries[layer_id] += cur_total_entries
         kv_entry_usage = [1 - free / total for free, total in zip(free_kv_entries, total_kv_entries)]
-        return max(kv_entry_usage)
+        return max(kv_entry_usage) * 10
 
     def get_node_usage(self, node_uid: int) -> Tuple[int, int]:
         """
