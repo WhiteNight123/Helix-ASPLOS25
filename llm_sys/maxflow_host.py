@@ -1,6 +1,7 @@
 # 2024.04.24 Yixuan Mei
 import os.path
 import time
+import random
 
 import llm_host
 from typing import Dict, List, Tuple
@@ -9,7 +10,7 @@ from simulator.event_simulator.cluster_simulator import ClusterSimulator, ModelN
 from simulator.event_simulator.request import InferenceRequest, RequestPhase, PipelineStage
 from simulator.initial_layout.layout_synthesizer import LayoutSynthesizer, LayoutMethod
 from simulator.scheduler.global_maxflow.global_maxflow_scheduler import SchedulingMode, KVParameters, SchedulerCore
-from simulator.trace_generator.trace_generator import TraceGenerator, LengthSampler, ArrivalRateSource, Dataset
+from simulator.trace_generator.sharegpt_loader import ShareGPTLoader
 
 from llm_sys.utils import SIMULATOR_NODE_OFFSET, get_local_ip, CONFIG_BROADCAST_ADDR, FlyingQuery
 
@@ -129,11 +130,40 @@ def run_maxflow_host_online(
     maxflow_scheduler: SchedulerCore = simulator.scheduler.core
     # -------------------------------------------------------------------------------------- #
 
-    # ------------------------------------- Online Generator ------------------------------------ #
-    trace_generator = TraceGenerator(arrival_rate_source=ArrivalRateSource.AzureConv,
-                                     length_dataset=Dataset.AzureConversation,
-                                     cluster_token_throughput=avg_throughput, seed=0)
-    trace = trace_generator.generate_trace(start_time=0, duration=duration)
+    # ------------------------------------- Online Generator (Poisson arrival with ShareGPT) ------------------------------------ #
+    # Load ShareGPT dataset
+    loader = ShareGPTLoader("/mnt/lvm-data/home/dataset/sharegpt/common_en_70k.jsonl")
+    print('Loading ShareGPT dataset into memory...')
+    loader.load_data()
+    print('ShareGPT dataset loaded successfully!')
+    
+    # Generate Poisson arrival trace with ShareGPT prompts
+    # avg_throughput is tokens/second, we need to convert to requests/second
+    # Assuming average tokens per request ~ 512 (256 input + 256 output)
+    avg_rps = avg_throughput / 512.0
+    trace = []  # list of (time, input_length, output_length)
+    current_time = 0.0
+    random.seed(0)
+    
+    while current_time < duration:
+        # Get a random prompt from ShareGPT
+        qa_pair = loader.get_random_qa()
+        prompt = qa_pair.get('human', '')
+        
+        # Estimate input length from prompt (approximate: words * 1.3 for tokens)
+        # Limit to reasonable range to avoid KV cache overflow
+        estimated_tokens = int(len(prompt.split()) * 1.3)
+        input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
+        # Random output length between 50 and 256 tokens
+        output_length = random.randint(50, 256)
+        
+        trace.append((current_time, input_length, output_length))
+        
+        # Generate next arrival time using exponential distribution (Poisson process)
+        inter_arrival_time = random.expovariate(avg_rps)
+        current_time += inter_arrival_time
+    
+    print(f"Generated {len(trace)} requests with Poisson arrival for {duration}s duration")
     # ------------------------------------------------------------------------------------------- #
 
     # ------------------------------------- Init System ------------------------------------ #
@@ -151,6 +181,10 @@ def run_maxflow_host_online(
     query_routes = []
     # time - query id - in/out - phase - context_len - this_iter_processed
     events = []
+    # NEW: detailed per-node timestamps
+    # time - query_id - event_type - phase - node_id - detail
+    # event_type: "send_to_node", "recv_from_node"
+    detailed_timestamps = []
     # ---------------------- #
     while True:
         # get time
@@ -172,6 +206,7 @@ def run_maxflow_host_online(
             next_query_id += 1
 
             # send it into the cluster
+            send_time = time.time() - ground_zero
             llm_host.launch_request(
                 "prompt",  # request_type
                 cur_query_id,  # request_id
@@ -199,6 +234,12 @@ def run_maxflow_host_online(
                                  end_layers))
             # time - query id - in/out - phase - context_len - this_iter_processed
             events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
+            
+            # NEW: Record send timestamp for each node in the route
+            for node_id in compute_node_uids:
+                detailed_timestamps.append((send_time, cur_query_id, "send_to_node", "prompt", node_id, 
+                                          f"input_len={input_length}"))
+            
             print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                   f"max_len = {input_length + output_length}")
 
@@ -207,17 +248,28 @@ def run_maxflow_host_online(
         finished_query_ids, generated_token_ids, routes, num_layers = llm_host.gather_finished_requests()
         for query_uid in finished_query_ids:
             # first receive the message
+            recv_time = time.time() - ground_zero
             py_on_the_fly_query = flying_queries_dict[query_uid]
             if py_on_the_fly_query.processed_tokens == 0:
                 # prompt phase
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "in", "prompt", 0, py_on_the_fly_query.input_length + 1))
                 py_on_the_fly_query.processed_tokens += py_on_the_fly_query.input_length + 1
+                
+                # NEW: Record receive timestamp for each node in the route
+                for node_id in py_on_the_fly_query.compute_node_uids:
+                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "prompt", node_id,
+                                              f"tokens={py_on_the_fly_query.input_length + 1}"))
             else:
                 # decode phase
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "in", "decode", py_on_the_fly_query.processed_tokens, 1))
                 py_on_the_fly_query.processed_tokens += 1
+                
+                # NEW: Record receive timestamp for each node in the route
+                for node_id in py_on_the_fly_query.compute_node_uids:
+                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "decode", node_id,
+                                              f"tokens={py_on_the_fly_query.processed_tokens}"))
 
             # then we decide whether to send out new messages (decodes)
             max_size = py_on_the_fly_query.input_length + py_on_the_fly_query.output_length
@@ -235,6 +287,7 @@ def run_maxflow_host_online(
                                  pipeline=py_on_the_fly_query.pipeline)
 
                 # then we send the query back into the cluster
+                decode_send_time = time.time() - ground_zero
                 llm_host.launch_request(
                     "decode",  # request_type
                     query_uid,  # request_id
@@ -249,17 +302,29 @@ def run_maxflow_host_online(
 
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "out", "decode", py_on_the_fly_query.processed_tokens, 1))
+                
+                # NEW: Record send timestamp for each node in the route (online mode)
+                for node_id in py_on_the_fly_query.compute_node_uids:
+                    detailed_timestamps.append((decode_send_time, query_uid, "send_to_node", "decode", node_id,
+                                              f"context_len={py_on_the_fly_query.processed_tokens}"))
 
     # save logging files
     print(f"Queries still flying: {flying_queries_dict.keys()}.")
     query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
     events_file_name = os.path.join(result_logging_dir, "events.txt")
+    detailed_timestamps_file_name = os.path.join(result_logging_dir, "detailed_timestamps.txt")
+    
     with open(query_routes_file_name, "w") as f:
         for item in query_routes:
             f.write(f"{item}\n")
     with open(events_file_name, "w") as f:
         for item in events:
             f.write(f"{item}\n")
+    with open(detailed_timestamps_file_name, "w") as f:
+        f.write("# timestamp - query_id - event_type - phase - node_id - detail\n")
+        for item in detailed_timestamps:
+            f.write(f"{item}\n")
+    print(f"Saved {len(detailed_timestamps)} detailed timestamp records to {detailed_timestamps_file_name}")
 
 
 def run_maxflow_host_offline(
@@ -317,13 +382,45 @@ def run_maxflow_host_offline(
     maxflow_scheduler: SchedulerCore = simulator.scheduler.core
     # -------------------------------------------------------------------------------------- #
 
-    # ------------------------------------- Offline Initial ------------------------------------- #
-    length_sampler = LengthSampler(dataset=Dataset.AzureConversation, seed=0)
+    # ------------------------------------- Offline Initial (Burst with ShareGPT) ------------------------------------- #
+    # Load ShareGPT dataset
+    loader = ShareGPTLoader("/mnt/lvm-data/home/dataset/sharegpt/common_en_70k.jsonl")
+    print('Loading ShareGPT dataset into memory...')
+    loader.load_data()
+    print('ShareGPT dataset loaded successfully!')
+    
+    # Generate burst-style initial requests uniformly distributed in a short time window
     initial_requests = []
+    window_seconds = 1.0  # Concentrate all initial requests in 1 second
+    random.seed(0)
+    
+    # Generate uniformly distributed time stamps within the window
+    time_stamps = []
+    interval = window_seconds / initial_launch_num
     for i in range(initial_launch_num):
-        request_time = 0.1 + i * 0.1
-        input_length, output_length = length_sampler.sample_length()
+        base_time = 0.1 + i * interval
+        # Add small jitter
+        jitter = random.uniform(-0.01, 0.01)
+        time_stamps.append(max(0.1, base_time + jitter))
+    
+    # Sort time stamps to ensure ordered submission
+    time_stamps.sort()
+    
+    for request_time in time_stamps:
+        # Get a random prompt from ShareGPT
+        qa_pair = loader.get_random_qa()
+        prompt = qa_pair.get('human', '')
+        
+        # Estimate input length from prompt (approximate: words * 1.3 for tokens)
+        # Limit to reasonable range to avoid KV cache overflow
+        estimated_tokens = int(len(prompt.split()) * 1.3)
+        input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
+        # Random output length between 50 and 256 tokens
+        output_length = random.randint(50, 256)
+        
         initial_requests.append((request_time, input_length, output_length))
+    
+    print(f"Generated {len(initial_requests)} burst requests for offline mode")
     # ------------------------------------------------------------------------------------------- #
 
     # ------------------------------------- Init System ------------------------------------ #
@@ -342,6 +439,10 @@ def run_maxflow_host_offline(
     query_routes = []
     # time - query id - in/out - phase - context_len - this_iter_processed
     events = []
+    # NEW: detailed per-node timestamps
+    # time - query_id - event_type - phase - node_id - detail
+    # event_type: "send_to_node", "recv_from_node"
+    detailed_timestamps = []
     # ---------------------- #
     while True:
         # get time
@@ -373,6 +474,7 @@ def run_maxflow_host_offline(
                 next_query_id += 1
 
                 # send it into the cluster
+                send_time = time.time() - ground_zero
                 llm_host.launch_request(
                     "prompt",  # request_type
                     cur_query_id,  # request_id
@@ -400,6 +502,12 @@ def run_maxflow_host_offline(
                                      end_layers))
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
+                
+                # NEW: Record send timestamp for each node in the route (offline initial)
+                for node_id in compute_node_uids:
+                    detailed_timestamps.append((send_time, cur_query_id, "send_to_node", "prompt", node_id,
+                                              f"input_len={input_length}"))
+                
                 print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                       f"max_len = {input_length + output_length}")
 
@@ -408,19 +516,28 @@ def run_maxflow_host_offline(
         finished_query_ids, generated_token_ids, routes, num_layers = llm_host.gather_finished_requests()
         for query_uid in finished_query_ids:
             # first receive the message
+            recv_time = time.time() - ground_zero
             py_on_the_fly_query = flying_queries_dict[query_uid]
             if py_on_the_fly_query.processed_tokens == 0:
                 # prompt phase
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "in", "prompt", 0, py_on_the_fly_query.input_length + 1))
                 py_on_the_fly_query.processed_tokens += py_on_the_fly_query.input_length + 1
+                
+                # NEW: Record receive timestamp for each node in the route (offline prompt)
+                for node_id in py_on_the_fly_query.compute_node_uids:
+                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "prompt", node_id,
+                                              f"tokens={py_on_the_fly_query.input_length + 1}"))
 
                 # at the end of prompt phase, we have a choice to add more requests if kv cache is ok
                 current_bottleneck = maxflow_scheduler.kv_expectation.bottleneck_usage()
                 if current_bottleneck <= feeding_hwm:
-                    # launch a new request
-                    # the request has a time stamp smaller than now, should be sent
-                    input_length, output_length = length_sampler.sample_length()
+                    # launch a new request (using ShareGPT)
+                    qa_pair = loader.get_random_qa()
+                    prompt = qa_pair.get('human', '')
+                    estimated_tokens = int(len(prompt.split()) * 1.3)
+                    input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
+                    output_length = random.randint(50, 256)
 
                     # schedule the request
                     compute_node_uids, start_layers, end_layers, pipeline = get_schedule(scheduler=maxflow_scheduler,
@@ -433,6 +550,7 @@ def run_maxflow_host_offline(
                         next_query_id += 1
 
                         # send it into the cluster
+                        new_send_time = time.time() - ground_zero
                         llm_host.launch_request(
                             "prompt",  # request_type
                             cur_query_id,  # request_id
@@ -460,6 +578,12 @@ def run_maxflow_host_offline(
                                              end_layers))
                         # time - query id - in/out - phase - context_len - this_iter_processed
                         events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
+                        
+                        # NEW: Record send timestamp for each node (offline new request at prompt phase)
+                        for node_id in compute_node_uids:
+                            detailed_timestamps.append((new_send_time, cur_query_id, "send_to_node", "prompt", node_id,
+                                                      f"input_len={input_length}"))
+                        
                         print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                               f"max_len = {input_length + output_length} (prompt request more)")
                     else:
@@ -471,6 +595,11 @@ def run_maxflow_host_offline(
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "in", "decode", py_on_the_fly_query.processed_tokens, 1))
                 py_on_the_fly_query.processed_tokens += 1
+                
+                # NEW: Record receive timestamp for each node in the route (offline decode)
+                for node_id in py_on_the_fly_query.compute_node_uids:
+                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "decode", node_id,
+                                              f"tokens={py_on_the_fly_query.processed_tokens}"))
 
             # then we decide whether to send out new messages (decodes)
             max_size = py_on_the_fly_query.input_length + py_on_the_fly_query.output_length
@@ -485,9 +614,12 @@ def run_maxflow_host_offline(
                 # we have a chance to determine whether we need to add a new request
                 current_bottleneck = maxflow_scheduler.kv_expectation.bottleneck_usage()
                 if current_bottleneck <= feeding_hwm:
-                    # launch a new request
-                    # the request has a time stamp smaller than now, should be sent
-                    input_length, output_length = length_sampler.sample_length()
+                    # launch a new request (using ShareGPT)
+                    qa_pair = loader.get_random_qa()
+                    prompt = qa_pair.get('human', '')
+                    estimated_tokens = int(len(prompt.split()) * 1.3)
+                    input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
+                    output_length = random.randint(50, 256)
 
                     # schedule the request
                     compute_node_uids, start_layers, end_layers, pipeline = get_schedule(scheduler=maxflow_scheduler,
@@ -500,6 +632,7 @@ def run_maxflow_host_offline(
                         next_query_id += 1
 
                         # send it into the cluster
+                        replacement_send_time = time.time() - ground_zero
                         llm_host.launch_request(
                             "prompt",  # request_type
                             cur_query_id,  # request_id
@@ -527,6 +660,12 @@ def run_maxflow_host_offline(
                                              end_layers))
                         # time - query id - in/out - phase - context_len - this_iter_processed
                         events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
+                        
+                        # NEW: Record send timestamp for each node (offline replacement after decode)
+                        for node_id in compute_node_uids:
+                            detailed_timestamps.append((replacement_send_time, cur_query_id, "send_to_node", "prompt", node_id,
+                                                      f"input_len={input_length}"))
+                        
                         print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                               f"max_len = {input_length + output_length} (decode finish request replacement)")
                     else:
@@ -539,6 +678,7 @@ def run_maxflow_host_offline(
                                  pipeline=py_on_the_fly_query.pipeline)
 
                 # then we send the query back into the cluster
+                decode_send_time = time.time() - ground_zero
                 llm_host.launch_request(
                     "decode",  # request_type
                     query_uid,  # request_id
@@ -553,14 +693,26 @@ def run_maxflow_host_offline(
 
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "out", "decode", py_on_the_fly_query.processed_tokens, 1))
+                
+                # NEW: Record send timestamp for each node in the route (offline decode)
+                for node_id in py_on_the_fly_query.compute_node_uids:
+                    detailed_timestamps.append((decode_send_time, query_uid, "send_to_node", "decode", node_id,
+                                              f"context_len={py_on_the_fly_query.processed_tokens}"))
 
     # save logging files
     print(f"Queries still flying: {flying_queries_dict.keys()}.")
     query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
     events_file_name = os.path.join(result_logging_dir, "events.txt")
+    detailed_timestamps_file_name = os.path.join(result_logging_dir, "detailed_timestamps.txt")
+    
     with open(query_routes_file_name, "w") as f:
         for item in query_routes:
             f.write(f"{item}\n")
     with open(events_file_name, "w") as f:
         for item in events:
             f.write(f"{item}\n")
+    with open(detailed_timestamps_file_name, "w") as f:
+        f.write("# timestamp - query_id - event_type - phase - node_id - detail\n")
+        for item in detailed_timestamps:
+            f.write(f"{item}\n")
+    print(f"Saved {len(detailed_timestamps)} detailed timestamp records to {detailed_timestamps_file_name}")

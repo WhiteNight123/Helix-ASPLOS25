@@ -21,11 +21,21 @@ import llm_sys.engine.qwen3
 import llm_sys.utils as utils
 
 
-def init_engine(layer_ids, model_name, vram_usage=0.95):
+def init_engine(layer_ids, model_name, vram_usage=0.8, quantization=None):
+    """
+    Initialize the pipeline stage engine.
+    
+    Args:
+        layer_ids: List of layer IDs to run on this worker
+        model_name: Path to model directory
+        vram_usage: GPU memory utilization (0.0-1.0)
+        quantization: Quantization method (None, "awq", "gptq", etc.)
+    """
     engine_args = EngineArgs(model=model_name, block_size=16,
                              load_format="dummy", enforce_eager=True,
                              swap_space=8, max_num_batched_tokens=4096,
-                             gpu_memory_utilization=vram_usage, dtype="float16")
+                             gpu_memory_utilization=vram_usage, dtype="float16",
+                             quantization=quantization)
 
     engine = PipelineStageEngine.from_engine_args(engine_args, layer_ids)
     return engine
@@ -81,7 +91,7 @@ def run_and_submit(engine, start_idx, end_idx, is_last_layer, hidden_size, force
     return parsed_prompt
 
 
-def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.95):
+def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.8, quantization=None):
     # warm up gpu and initialize llm_sys
     print("[Python] Starting worker initialization...")
     utils.warm_up()
@@ -101,9 +111,10 @@ def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, v
     print(f"[Python] Does this node output the last layer: {is_last_layer}.")
 
     # init vllm
-    print(f"[Python] Initializing vLLM engine for layers {start_idx} to {end_idx}...")
+    quantization_str = f" with {quantization} quantization" if quantization else ""
+    print(f"[Python] Initializing vLLM engine for layers {start_idx} to {end_idx}{quantization_str}...")
     layer_ids = list(range(start_idx, end_idx))
-    engine: PipelineStageEngine = init_engine(layer_ids, model_name, vram_usage=vram_usage)
+    engine: PipelineStageEngine = init_engine(layer_ids, model_name, vram_usage=vram_usage, quantization=quantization)
     hidden_size = engine.model_config.get_hidden_size()
     print(f"[Python] vLLM engine initialized successfully! Hidden size: {hidden_size}")
     print(f"[Python] Entering main inference loop...")

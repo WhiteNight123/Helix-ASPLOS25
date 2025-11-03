@@ -16,28 +16,36 @@ class Qwen32BonRTX2080Ti(ModelOnMachine):
         """
         Qwen3-32B + RTX2080Ti 11GB
         Qwen3-32B has 64 layers, approximately 32B parameters
-        Each layer is about 0.5GB (32B / 64 layers)
-        RTX2080Ti has 11GB VRAM, can fit approximately 10-11 layers with KV cache
+        Each layer is about 0.5GB (32B / 64 layers) in FP16
+        With AWQ quantization (4-bit), each layer is about 0.125GB
+        RTX2080Ti has 11GB VRAM:
+        - Without quantization: can fit approximately 10-11 layers with KV cache
+        - With AWQ quantization: can fit approximately 16 layers with KV cache
         """
         # --------------- Machine Dependent Data --------------- #
         machine_name: str = "RTX2080Ti"
-        max_num_layers: int = 10  # Can fit 10 layers of Qwen3-32B per 11GB GPU (for 7 GPUs setup)
+        max_num_layers: int = 16  # Can fit 16 layers of Qwen3-32B-AWQ per 11GB GPU (for 4 GPUs setup)
         
         # Qwen3-32B has 64 layers, larger than Qwen2.5-14B (48 layers)
-        # With 7 GPUs and 9-10 layers each, we can cover all 64 layers
+        # With 7 GPUs and 9-10 layers each, we can cover all 64 layers (FP16)
+        # With 4 GPUs and 16 layers each (AWQ), we can also cover all 64 layers
         # First and last GPUs handle embedding/output, so they can have fewer layers
         # Adjusted KV cache blocks based on memory constraints
+        # For AWQ quantization (layers 11-16), memory is saved on weights, allowing more KV cache
         vllm_num_blocks_dict: Dict[int, int] = {
             1: 30000, 2: 15000, 3: 10000, 4: 7500, 5: 6000,
-            6: 5000, 7: 4200, 8: 3600, 9: 3200, 10: 2800
+            6: 5000, 7: 4200, 8: 3600, 9: 3200, 10: 2800,
+            11: 2500, 12: 2300, 13: 2100, 14: 1900, 15: 1800, 16: 1700
         }
         prompt_max_requests_dict: Dict[int, int] = {
             1: 2, 2: 2, 3: 1, 4: 1, 5: 1,
-            6: 1, 7: 1, 8: 1, 9: 1, 10: 1
+            6: 1, 7: 1, 8: 1, 9: 1, 10: 1,
+            11: 1, 12: 1, 13: 1, 14: 1, 15: 1, 16: 1
         }
         decode_max_tokens_dict: Dict[int, int] = {
             1: 400, 2: 280, 3: 200, 4: 150, 5: 120,
-            6: 100, 7: 85, 8: 70, 9: 60, 10: 50
+            6: 100, 7: 85, 8: 70, 9: 60, 10: 50,
+            11: 45, 12: 40, 13: 37, 14: 34, 15: 32, 16: 30
         }
         # ------------------------------------------------------ #
 

@@ -3,8 +3,9 @@
 import llm_host
 import os
 import time
+import random
 
-from simulator.trace_generator.trace_generator import TraceGenerator, ArrivalRateSource, Dataset, LengthSampler
+from simulator.trace_generator.sharegpt_loader import ShareGPTLoader
 from llm_sys.utils import get_local_ip, CONFIG_BROADCAST_ADDR, FlyingQuery
 
 
@@ -25,11 +26,40 @@ def run_heuristic_host_online(
     assert scheduler_name == "swarm" or scheduler_name == "random", "Scheduler must be either swarm or random!"
     print(f"Initializing host with {scheduler_name} scheduling!")
 
-    # ------------------------------------- Online Generator ------------------------------------ #
-    trace_generator = TraceGenerator(arrival_rate_source=ArrivalRateSource.AzureConv,
-                                     length_dataset=Dataset.AzureConversation,
-                                     cluster_token_throughput=avg_throughput, seed=0)
-    trace = trace_generator.generate_trace(start_time=0, duration=duration)
+    # ------------------------------------- Online Generator (Poisson arrival with ShareGPT) ------------------------------------ #
+    # Load ShareGPT dataset
+    loader = ShareGPTLoader("/mnt/lvm-data/home/dataset/sharegpt/common_en_70k.jsonl")
+    print('Loading ShareGPT dataset into memory...')
+    loader.load_data()
+    print('ShareGPT dataset loaded successfully!')
+    
+    # Generate Poisson arrival trace with ShareGPT prompts
+    # avg_throughput is tokens/second, we need to convert to requests/second
+    # Assuming average tokens per request ~ 512 (256 input + 256 output)
+    avg_rps = avg_throughput / 512.0
+    trace = []  # list of (time, input_length, output_length)
+    current_time = 0.0
+    random.seed(0)
+    
+    while current_time < duration:
+        # Get a random prompt from ShareGPT
+        qa_pair = loader.get_random_qa()
+        prompt = qa_pair.get('human', '')
+        
+        # Estimate input length from prompt (approximate: words * 1.3 for tokens)
+        # Limit to reasonable range to avoid KV cache overflow
+        estimated_tokens = int(len(prompt.split()) * 1.3)
+        input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
+        # Random output length between 50 and 256 tokens
+        output_length = random.randint(50, 256)
+        
+        trace.append((current_time, input_length, output_length))
+        
+        # Generate next arrival time using exponential distribution (Poisson process)
+        inter_arrival_time = random.expovariate(avg_rps)
+        current_time += inter_arrival_time
+    
+    print(f"Generated {len(trace)} requests with Poisson arrival for {duration}s duration")
     # ------------------------------------------------------------------------------------------- #
 
     # ------------------------------------- Init System ------------------------------------ #
@@ -174,13 +204,45 @@ def run_heuristic_host_offline(
     assert scheduler_name == "swarm" or scheduler_name == "random", "Scheduler must be either swarm or random!"
     print(f"Initializing host with {scheduler_name} scheduling!")
 
-    # ------------------------------------- Offline Initial ------------------------------------- #
-    length_sampler = LengthSampler(dataset=Dataset.AzureConversation, seed=0)
+    # ------------------------------------- Offline Initial (Burst with ShareGPT) ------------------------------------- #
+    # Load ShareGPT dataset
+    loader = ShareGPTLoader("/mnt/lvm-data/home/dataset/sharegpt/common_en_70k.jsonl")
+    print('Loading ShareGPT dataset into memory...')
+    loader.load_data()
+    print('ShareGPT dataset loaded successfully!')
+    
+    # Generate burst-style initial requests uniformly distributed in a short time window
     initial_requests = []
+    window_seconds = 1.0  # Concentrate all initial requests in 1 second
+    random.seed(0)
+    
+    # Generate uniformly distributed time stamps within the window
+    time_stamps = []
+    interval = window_seconds / initial_launch_num
     for i in range(initial_launch_num):
-        request_time = 0.1 + i * 0.1
-        input_length, output_length = length_sampler.sample_length()
+        base_time = 0.1 + i * interval
+        # Add small jitter
+        jitter = random.uniform(-0.01, 0.01)
+        time_stamps.append(max(0.1, base_time + jitter))
+    
+    # Sort time stamps to ensure ordered submission
+    time_stamps.sort()
+    
+    for request_time in time_stamps:
+        # Get a random prompt from ShareGPT
+        qa_pair = loader.get_random_qa()
+        prompt = qa_pair.get('human', '')
+        
+        # Estimate input length from prompt (approximate: words * 1.3 for tokens)
+        # Limit to reasonable range to avoid KV cache overflow
+        estimated_tokens = int(len(prompt.split()) * 1.3)
+        input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
+        # Random output length between 50 and 256 tokens
+        output_length = random.randint(50, 256)
+        
         initial_requests.append((request_time, input_length, output_length))
+    
+    print(f"Generated {len(initial_requests)} burst requests for offline mode")
     # ------------------------------------------------------------------------------------------- #
 
     # ------------------------------------- Init System ------------------------------------ #
@@ -283,8 +345,12 @@ def run_heuristic_host_offline(
                 del flying_queries_dict[query_uid]
                 print(f"Query {query_uid}, finished (total_len={py_on_the_fly_query.processed_tokens})")
 
-                # send a new query to replace the old one
-                input_length, output_length = length_sampler.sample_length()
+                # send a new query to replace the old one (using ShareGPT)
+                qa_pair = loader.get_random_qa()
+                prompt = qa_pair.get('human', '')
+                estimated_tokens = int(len(prompt.split()) * 1.3)
+                input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
+                output_length = random.randint(50, 256)
 
                 # get query id
                 cur_query_id = next_query_id
