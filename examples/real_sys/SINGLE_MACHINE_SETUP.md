@@ -1,8 +1,5 @@
 # 单机4台RTX2080Ti运行LLaMA2-13B配置说明
 
-## 修改内容
-
-本配置已经修改为支持在单机上使用4台RTX2080Ti GPU运行LLaMA2-13B模型。
 
 ### 1. 硬件配置文件 (config/machine_profile.ini)
 - 添加了 RTX2080Ti 的配置项

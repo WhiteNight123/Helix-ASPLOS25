@@ -6,6 +6,7 @@ from simulator.event_simulator.model import MachineProfile
 from simulator.event_simulator.compute_node import InferenceSettings
 from simulator.model_manager.base_classes import ModelStatistics
 from simulator.model_manager.qwen3_32b.rtx2080ti.qwen3_32b_rtx2080ti import Qwen32BonRTX2080Ti
+from simulator.model_manager.qwen3_32b.rtx4090.qwen3_32b_rtx4090 import Qwen32BonRTX4090
 from simulator.event_simulator.utils import Byte, GB, Qwen3_32B_TOTAL_LAYERS
 
 
@@ -14,22 +15,23 @@ class Qwen32BStatistics(ModelStatistics):
         """
         This class stores the profiling results of different machines running Qwen3-32B.
         num_machines_dict is a subset of supported machine types.
-        Currently supports: {"RTX2080Ti": X}
+        Currently supports: {"RTX2080Ti": X, "RTX4090": Y}
         """
         # estimate the typical number of layers on node
-        typical_layers_dict = {"RTX2080Ti": 9}
+        typical_layers_dict = {"RTX2080Ti": 9, "RTX4090": 16}
         total_layer_capacity = 0
         for machine_name in num_machines_dict:
             total_layer_capacity += num_machines_dict[machine_name] * typical_layers_dict.get(machine_name, 9)
         
         # Adjust if capacity is low (need at least 64 layers for Qwen3-32B)
         if total_layer_capacity < Qwen3_32B_TOTAL_LAYERS * 1.2:
-            typical_layers_dict = {"RTX2080Ti": 10}  # Use 10 layers per GPU if needed
+            typical_layers_dict = {"RTX2080Ti": 10, "RTX4090": 20}  # Use more layers per GPU if needed
         typical_layers_dict = {m_type: typical_layers_dict.get(m_type, 9) for m_type in num_machines_dict}
 
         # estimate the normalized performance
-        # RTX2080Ti performance for larger model (32B parameters)
-        normalized_perf_dict = {"RTX2080Ti": 12}  # Lower than 14B due to larger model
+        # RTX2080Ti and RTX4090 performance for larger model (32B parameters)
+        # RTX4090 is approximately 2x faster than RTX2080Ti
+        normalized_perf_dict = {"RTX2080Ti": 12, "RTX4090": 24}
         normalized_perf_dict = {m_type: normalized_perf_dict.get(m_type, 12) for m_type in num_machines_dict}
         
         # Iteratively refine performance estimates
@@ -45,6 +47,16 @@ class Qwen32BStatistics(ModelStatistics):
                     num_on_node_layers=typical_layers_dict["RTX2080Ti"]
                 )
                 new_normalized_perf_dict["RTX2080Ti"] = rtx2080ti_typical_tp * typical_layers_dict["RTX2080Ti"]
+            if "RTX4090" in num_machines_dict:
+                rtx4090 = Qwen32BonRTX4090(
+                    num_machines_dict=num_machines_dict,
+                    typical_layers_dict=typical_layers_dict,
+                    normalized_perf_dict=normalized_perf_dict
+                )
+                rtx4090_typical_tp = rtx4090.get_typical_token_throughput(
+                    num_on_node_layers=typical_layers_dict["RTX4090"]
+                )
+                new_normalized_perf_dict["RTX4090"] = rtx4090_typical_tp * typical_layers_dict["RTX4090"]
             normalized_perf_dict = new_normalized_perf_dict
 
         # save the final results
@@ -61,6 +73,15 @@ class Qwen32BStatistics(ModelStatistics):
             )
         else:
             self.rtx2080ti = None
+            
+        if "RTX4090" in num_machines_dict:
+            self.rtx4090 = Qwen32BonRTX4090(
+                num_machines_dict=num_machines_dict,
+                typical_layers_dict=typical_layers_dict,
+                normalized_perf_dict=normalized_perf_dict
+            )
+        else:
+            self.rtx4090 = None
 
         # model statistics
         self.token_size: float = 2 * Byte  # FP16/BF16
@@ -79,6 +100,8 @@ class Qwen32BStatistics(ModelStatistics):
         assert self.check_type_exist(machine_type), f"Machine type {machine_type} not found!"
         if machine_type == "RTX2080Ti":
             return self.rtx2080ti.get_profiling_results()
+        elif machine_type == "RTX4090":
+            return self.rtx4090.get_profiling_results()
         else:
             assert False, f"Unknown machine type: {machine_type}"
 
@@ -87,6 +110,8 @@ class Qwen32BStatistics(ModelStatistics):
         assert self.check_type_exist(machine_type), f"Machine type {machine_type} not found!"
         if machine_type == "RTX2080Ti":
             return self.rtx2080ti.get_max_num_layers()
+        elif machine_type == "RTX4090":
+            return self.rtx4090.get_max_num_layers()
         else:
             assert False, f"Unknown machine type: {machine_type}"
 
@@ -95,6 +120,8 @@ class Qwen32BStatistics(ModelStatistics):
         assert self.check_type_exist(machine_type), f"Machine type {machine_type} not found!"
         if machine_type == "RTX2080Ti":
             return self.rtx2080ti.get_inference_settings(num_on_node_layers=num_on_node_layers)
+        elif machine_type == "RTX4090":
+            return self.rtx4090.get_inference_settings(num_on_node_layers=num_on_node_layers)
         else:
             assert False, f"Unknown machine type: {machine_type}"
 
@@ -103,6 +130,8 @@ class Qwen32BStatistics(ModelStatistics):
         assert self.check_type_exist(machine_type), f"Machine type {machine_type} not found!"
         if machine_type == "RTX2080Ti":
             return self.rtx2080ti.get_typical_token_throughput(num_on_node_layers=num_on_node_layers)
+        elif machine_type == "RTX4090":
+            return self.rtx4090.get_typical_token_throughput(num_on_node_layers=num_on_node_layers)
         else:
             assert False, f"Unknown machine type: {machine_type}"
 
@@ -111,6 +140,8 @@ class Qwen32BStatistics(ModelStatistics):
         assert self.check_type_exist(machine_type), f"Machine type {machine_type} not found!"
         if machine_type == "RTX2080Ti":
             return self.rtx2080ti.get_kv_cache_capacity(num_on_node_layers=num_on_node_layers)
+        elif machine_type == "RTX4090":
+            return self.rtx4090.get_kv_cache_capacity(num_on_node_layers=num_on_node_layers)
         else:
             assert False, f"Unknown machine type: {machine_type}"
 
@@ -119,6 +150,8 @@ class Qwen32BStatistics(ModelStatistics):
         assert self.check_type_exist(machine_type), f"Machine type {machine_type} not found!"
         if machine_type == "RTX2080Ti":
             return self.rtx2080ti.get_activation_backup_capacity(num_on_node_layers=num_on_node_layers)
+        elif machine_type == "RTX4090":
+            return self.rtx4090.get_activation_backup_capacity(num_on_node_layers=num_on_node_layers)
         else:
             assert False, f"Unknown machine type: {machine_type}"
 
