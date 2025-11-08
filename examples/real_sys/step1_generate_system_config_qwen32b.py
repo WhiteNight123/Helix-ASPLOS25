@@ -14,7 +14,7 @@ def main():
         machine_profile_file_name="./config/machine_profile.ini",
         # model placement
         solution_file_name="./layout/ilp_sol_qwen32b_7gpu.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster_qwen32b_7gpu.ini",
+        simulator_cluster_file_name="./layout/simulator_cluster_7gpu.ini",
         # output directory
         output_dir="./config",
         output_file_name="real_sys_config.txt"

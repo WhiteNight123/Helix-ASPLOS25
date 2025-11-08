@@ -16,12 +16,12 @@ def qwen32b_awq_maxflow_offline():
         machine_num_dict={"RTX2080Ti": 4},
         model_name=ModelName.Qwen32B,
         # cluster
-        complete_cluster_file_name="./config/single4_awq.ini",
+        complete_cluster_file_name="./config/single4.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
         solution_file_name="./layout/ilp_sol_qwen32b_4gpu_awq.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster_qwen32b_4gpu_awq.ini",
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_awq.txt",
+        simulator_cluster_file_name="./layout/simulator_cluster_4gpu.ini",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
         initial_launch_num=2,
@@ -39,12 +39,12 @@ def qwen32b_awq_maxflow_online():
         machine_num_dict={"RTX2080Ti": 4},
         model_name=ModelName.Qwen32B,
         # cluster
-        complete_cluster_file_name="./config/single4_awq.ini",
+        complete_cluster_file_name="./config/single4.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
         solution_file_name="./layout/ilp_sol_qwen32b_4gpu_awq.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster_qwen32b_4gpu_awq.ini",
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_awq.txt",
+        simulator_cluster_file_name="./layout/simulator_cluster_4gpu.ini",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
         avg_throughput=200,
@@ -63,7 +63,7 @@ def qwen32b_awq_heuristic_offline(heuristic: str):
     print(f"Running Qwen3-32B-AWQ: {heuristic} host + offline mode")
     run_heuristic_host_offline(
         scheduler_name=heuristic,
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_awq.txt",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         initial_launch_num=50,
         duration=300,
         result_logging_dir=result_dir
@@ -80,7 +80,7 @@ def qwen32b_awq_heuristic_online(heuristic: str):
     print(f"Running Qwen3-32B-AWQ: {heuristic} host + online mode")
     run_heuristic_host_online(
         scheduler_name=heuristic,
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_awq.txt",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         avg_throughput=100,
         duration=300,
         result_logging_dir=result_dir

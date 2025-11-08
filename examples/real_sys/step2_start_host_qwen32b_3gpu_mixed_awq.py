@@ -16,12 +16,12 @@ def qwen32b_3gpu_mixed_awq_maxflow_offline():
         machine_num_dict={"RTX2080Ti": 2, "RTX4090": 1},
         model_name=ModelName.Qwen32B,
         # cluster
-        complete_cluster_file_name="./config/single3_mixed_awq.ini",
+        complete_cluster_file_name="./config/single3.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
         solution_file_name="./layout/ilp_sol_qwen32b_3gpu_mixed_awq.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster_qwen32b_3gpu_mixed_awq.ini",
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_3gpu_mixed_awq.txt",
+        simulator_cluster_file_name="./layout/simulator_cluster_3gpu_mixed.ini",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
         initial_launch_num=2,
@@ -39,12 +39,12 @@ def qwen32b_3gpu_mixed_awq_maxflow_online():
         machine_num_dict={"RTX2080Ti": 2, "RTX4090": 1},
         model_name=ModelName.Qwen32B,
         # cluster
-        complete_cluster_file_name="./config/single3_mixed_awq.ini",
+        complete_cluster_file_name="./config/single3.ini",
         machine_profile_name="./config/machine_profile.ini",
         # solution
         solution_file_name="./layout/ilp_sol_qwen32b_3gpu_mixed_awq.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster_qwen32b_3gpu_mixed_awq.ini",
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_3gpu_mixed_awq.txt",
+        simulator_cluster_file_name="./layout/simulator_cluster_3gpu_mixed.ini",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
         avg_throughput=200,
@@ -63,7 +63,7 @@ def qwen32b_3gpu_mixed_awq_heuristic_offline(heuristic: str):
     print(f"Running Qwen3-32B-AWQ: {heuristic} host + offline mode (2x RTX2080Ti + 1x RTX4090)")
     run_heuristic_host_offline(
         scheduler_name=heuristic,
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_3gpu_mixed_awq.txt",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         initial_launch_num=50,
         duration=300,
         result_logging_dir=result_dir
@@ -78,9 +78,13 @@ def qwen32b_3gpu_mixed_awq_heuristic_online(heuristic: str):
 
     # run heuristic host online
     print(f"Running Qwen3-32B-AWQ: {heuristic} host + online mode (2x RTX2080Ti + 1x RTX4090)")
+    print("Configuration:")
+    print("  - RTX2080Ti #1 (10.202.210.104:5001): layers 0-15")
+    print("  - RTX2080Ti #2 (10.202.210.104:5002): layers 16-31")
+    print("  - RTX4090 (10.130.151.13): layers 32-63")
     run_heuristic_host_online(
         scheduler_name=heuristic,
-        real_sys_config_file_name="./config/real_sys_config_qwen32b_3gpu_mixed_awq.txt",
+        real_sys_config_file_name="./config/real_sys_config.txt",
         avg_throughput=100,
         duration=300,
         result_logging_dir=result_dir

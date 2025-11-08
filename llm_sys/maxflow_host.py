@@ -181,10 +181,7 @@ def run_maxflow_host_online(
     query_routes = []
     # time - query id - in/out - phase - context_len - this_iter_processed
     events = []
-    # NEW: detailed per-node timestamps
-    # time - query_id - event_type - phase - node_id - detail
-    # event_type: "send_to_node", "recv_from_node"
-    detailed_timestamps = []
+
     # ---------------------- #
     while True:
         # get time
@@ -235,10 +232,7 @@ def run_maxflow_host_online(
             # time - query id - in/out - phase - context_len - this_iter_processed
             events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
             
-            # NEW: Record send timestamp for each node in the route
-            for node_id in compute_node_uids:
-                detailed_timestamps.append((send_time, cur_query_id, "send_to_node", "prompt", node_id, 
-                                          f"input_len={input_length}"))
+
             
             print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                   f"max_len = {input_length + output_length}")
@@ -256,21 +250,13 @@ def run_maxflow_host_online(
                 events.append((now, query_uid, "in", "prompt", 0, py_on_the_fly_query.input_length + 1))
                 py_on_the_fly_query.processed_tokens += py_on_the_fly_query.input_length + 1
                 
-                # NEW: Record receive timestamp for each node in the route
-                for node_id in py_on_the_fly_query.compute_node_uids:
-                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "prompt", node_id,
-                                              f"tokens={py_on_the_fly_query.input_length + 1}"))
+
             else:
                 # decode phase
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "in", "decode", py_on_the_fly_query.processed_tokens, 1))
                 py_on_the_fly_query.processed_tokens += 1
                 
-                # NEW: Record receive timestamp for each node in the route
-                for node_id in py_on_the_fly_query.compute_node_uids:
-                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "decode", node_id,
-                                              f"tokens={py_on_the_fly_query.processed_tokens}"))
-
             # then we decide whether to send out new messages (decodes)
             max_size = py_on_the_fly_query.input_length + py_on_the_fly_query.output_length
             assert py_on_the_fly_query.processed_tokens <= max_size, "Found request that did not end!"
@@ -303,16 +289,11 @@ def run_maxflow_host_online(
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "out", "decode", py_on_the_fly_query.processed_tokens, 1))
                 
-                # NEW: Record send timestamp for each node in the route (online mode)
-                for node_id in py_on_the_fly_query.compute_node_uids:
-                    detailed_timestamps.append((decode_send_time, query_uid, "send_to_node", "decode", node_id,
-                                              f"context_len={py_on_the_fly_query.processed_tokens}"))
 
     # save logging files
     print(f"Queries still flying: {flying_queries_dict.keys()}.")
     query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
     events_file_name = os.path.join(result_logging_dir, "events.txt")
-    detailed_timestamps_file_name = os.path.join(result_logging_dir, "detailed_timestamps.txt")
     
     with open(query_routes_file_name, "w") as f:
         for item in query_routes:
@@ -320,11 +301,7 @@ def run_maxflow_host_online(
     with open(events_file_name, "w") as f:
         for item in events:
             f.write(f"{item}\n")
-    with open(detailed_timestamps_file_name, "w") as f:
-        f.write("# timestamp - query_id - event_type - phase - node_id - detail\n")
-        for item in detailed_timestamps:
-            f.write(f"{item}\n")
-    print(f"Saved {len(detailed_timestamps)} detailed timestamp records to {detailed_timestamps_file_name}")
+
 
 
 def run_maxflow_host_offline(
@@ -439,10 +416,7 @@ def run_maxflow_host_offline(
     query_routes = []
     # time - query id - in/out - phase - context_len - this_iter_processed
     events = []
-    # NEW: detailed per-node timestamps
-    # time - query_id - event_type - phase - node_id - detail
-    # event_type: "send_to_node", "recv_from_node"
-    detailed_timestamps = []
+
     # ---------------------- #
     while True:
         # get time
@@ -503,10 +477,6 @@ def run_maxflow_host_offline(
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
                 
-                # NEW: Record send timestamp for each node in the route (offline initial)
-                for node_id in compute_node_uids:
-                    detailed_timestamps.append((send_time, cur_query_id, "send_to_node", "prompt", node_id,
-                                              f"input_len={input_length}"))
                 
                 print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                       f"max_len = {input_length + output_length}")
@@ -524,10 +494,6 @@ def run_maxflow_host_offline(
                 events.append((now, query_uid, "in", "prompt", 0, py_on_the_fly_query.input_length + 1))
                 py_on_the_fly_query.processed_tokens += py_on_the_fly_query.input_length + 1
                 
-                # NEW: Record receive timestamp for each node in the route (offline prompt)
-                for node_id in py_on_the_fly_query.compute_node_uids:
-                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "prompt", node_id,
-                                              f"tokens={py_on_the_fly_query.input_length + 1}"))
 
                 # at the end of prompt phase, we have a choice to add more requests if kv cache is ok
                 current_bottleneck = maxflow_scheduler.kv_expectation.bottleneck_usage()
@@ -579,10 +545,6 @@ def run_maxflow_host_offline(
                         # time - query id - in/out - phase - context_len - this_iter_processed
                         events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
                         
-                        # NEW: Record send timestamp for each node (offline new request at prompt phase)
-                        for node_id in compute_node_uids:
-                            detailed_timestamps.append((new_send_time, cur_query_id, "send_to_node", "prompt", node_id,
-                                                      f"input_len={input_length}"))
                         
                         print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                               f"max_len = {input_length + output_length} (prompt request more)")
@@ -596,10 +558,6 @@ def run_maxflow_host_offline(
                 events.append((now, query_uid, "in", "decode", py_on_the_fly_query.processed_tokens, 1))
                 py_on_the_fly_query.processed_tokens += 1
                 
-                # NEW: Record receive timestamp for each node in the route (offline decode)
-                for node_id in py_on_the_fly_query.compute_node_uids:
-                    detailed_timestamps.append((recv_time, query_uid, "recv_from_node", "decode", node_id,
-                                              f"tokens={py_on_the_fly_query.processed_tokens}"))
 
             # then we decide whether to send out new messages (decodes)
             max_size = py_on_the_fly_query.input_length + py_on_the_fly_query.output_length
@@ -661,10 +619,6 @@ def run_maxflow_host_offline(
                         # time - query id - in/out - phase - context_len - this_iter_processed
                         events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
                         
-                        # NEW: Record send timestamp for each node (offline replacement after decode)
-                        for node_id in compute_node_uids:
-                            detailed_timestamps.append((replacement_send_time, cur_query_id, "send_to_node", "prompt", node_id,
-                                                      f"input_len={input_length}"))
                         
                         print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                               f"max_len = {input_length + output_length} (decode finish request replacement)")
@@ -694,16 +648,11 @@ def run_maxflow_host_offline(
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "out", "decode", py_on_the_fly_query.processed_tokens, 1))
                 
-                # NEW: Record send timestamp for each node in the route (offline decode)
-                for node_id in py_on_the_fly_query.compute_node_uids:
-                    detailed_timestamps.append((decode_send_time, query_uid, "send_to_node", "decode", node_id,
-                                              f"context_len={py_on_the_fly_query.processed_tokens}"))
 
     # save logging files
     print(f"Queries still flying: {flying_queries_dict.keys()}.")
     query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
     events_file_name = os.path.join(result_logging_dir, "events.txt")
-    detailed_timestamps_file_name = os.path.join(result_logging_dir, "detailed_timestamps.txt")
     
     with open(query_routes_file_name, "w") as f:
         for item in query_routes:
@@ -711,8 +660,3 @@ def run_maxflow_host_offline(
     with open(events_file_name, "w") as f:
         for item in events:
             f.write(f"{item}\n")
-    with open(detailed_timestamps_file_name, "w") as f:
-        f.write("# timestamp - query_id - event_type - phase - node_id - detail\n")
-        for item in detailed_timestamps:
-            f.write(f"{item}\n")
-    print(f"Saved {len(detailed_timestamps)} detailed timestamp records to {detailed_timestamps_file_name}")

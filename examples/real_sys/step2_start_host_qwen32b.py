@@ -19,7 +19,7 @@ def qwen32b_maxflow_offline():
         machine_profile_name="./config/machine_profile.ini",
         # solution
         solution_file_name="./layout/ilp_sol_qwen32b_7gpu.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster_qwen32b_7gpu.ini",
+        simulator_cluster_file_name="./layout/simulator_cluster_7gpu.ini",
         real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
@@ -42,7 +42,7 @@ def qwen32b_maxflow_online():
         machine_profile_name="./config/machine_profile.ini",
         # solution
         solution_file_name="./layout/ilp_sol_qwen32b_7gpu.ini",
-        simulator_cluster_file_name="./layout/simulator_cluster_qwen32b_7gpu.ini",
+        simulator_cluster_file_name="./layout/simulator_cluster_7gpu.ini",
         real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
