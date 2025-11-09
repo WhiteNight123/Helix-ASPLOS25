@@ -28,12 +28,12 @@ def main():
         # In Docker, you can use macvlan or host network with different IP aliases
         type2ips={
             "RTX2080Ti": [
-                "10.202.210.105",  # GPU1 on first 2080Ti host
-                "10.202.210.106",  # GPU2 on first 2080Ti host
+                "10.100.0.11",  # GPU1 on first 2080Ti host
+                "10.100.0.12",  # GPU2 on first 2080Ti host
             ],
             "RTX4090": [
-                "10.130.151.14",   # GPU1 on 4090 host
-                "10.130.151.15",   # GPU2 on 4090 host
+                "10.100.0.13",   # GPU1 on 4090 host
+                "10.100.0.14",   # GPU2 on 4090 host
             ]
         },
         
