@@ -88,7 +88,7 @@ def run_maxflow_host_online(
         simulator_cluster_file_name: str,
         real_sys_config_file_name: str,
         # throughput
-        avg_throughput: float,
+        avg_rps: float,
         duration: int,
         # result
         result_logging_dir: str,
@@ -137,27 +137,32 @@ def run_maxflow_host_online(
     loader.load_data()
     print('ShareGPT dataset loaded successfully!')
     
+    # Load pre-shuffled sequence and token counts
+    from simulator.sharegpt_launcher.dataset_sequences import sequence_shuffled
+    from simulator.sharegpt_launcher.token_counts import input_tokens_list, output_tokens_list
+    
     # Generate Poisson arrival trace with ShareGPT prompts
     # avg_throughput is tokens/second, we need to convert to requests/second
-    # Assuming average tokens per request ~ 512 (256 input + 256 output)
-    avg_rps = avg_throughput / 512.0
-    trace = []  # list of (time, input_length, output_length)
+    # Based on the actual average: (676.07 + 216.07) = 892.14 tokens per request
+    avg_rps = avg_rps
+    trace = []  # list of (time, input_length, output_length, qa_index)
     current_time = 0.0
+    sequence_index = 0
     random.seed(0)
     
     while current_time < duration:
-        # Get a random prompt from ShareGPT
-        qa_pair = loader.get_random_qa()
-        prompt = qa_pair.get('human', '')
+        # Get the next QA pair from the shuffled sequence
+        if sequence_index >= len(sequence_shuffled):
+            print("Warning: sequence_shuffled exhausted, restarting from beginning")
+            sequence_index = 0
         
-        # Estimate input length from prompt (approximate: words * 1.3 for tokens)
-        # Limit to reasonable range to avoid KV cache overflow
-        estimated_tokens = int(len(prompt.split()) * 1.3)
-        input_length = max(32, min(estimated_tokens, 256))  # Clamp between 32 and 256
-        # Random output length between 50 and 256 tokens
-        output_length = random.randint(50, 256)
+        qa_index = sequence_shuffled[sequence_index]
+        input_length = input_tokens_list[sequence_index]
+        output_length = output_tokens_list[sequence_index]
         
-        trace.append((current_time, input_length, output_length))
+        trace.append((current_time, input_length, output_length, qa_index))
+        
+        sequence_index += 1
         
         # Generate next arrival time using exponential distribution (Poisson process)
         inter_arrival_time = random.expovariate(avg_rps)
@@ -192,7 +197,7 @@ def run_maxflow_host_online(
         # send new requests into cluster if needed
         while not len(trace) == 0 and trace[0][0] <= now:
             # the request has a time stamp smaller than now, should be sent
-            expected_submit_time, input_length, output_length = trace.pop(0)
+            expected_submit_time, input_length, output_length, qa_index = trace.pop(0)
 
             # schedule the request
             compute_node_uids, start_layers, end_layers, pipeline = get_schedule(scheduler=maxflow_scheduler,

@@ -114,6 +114,7 @@ docker run -d --rm \
   --network helix_overlay_network \
   --ip 10.100.0.11 \
   --gpus '"device=5"' \
+  -e HELIX_HOST_IP=10.100.0.10 \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.11"
@@ -124,6 +125,7 @@ docker run -d --rm \
   --network helix_overlay_network \
   --ip 10.100.0.12 \
   --gpus '"device=6"' \
+  -e HELIX_HOST_IP=10.100.0.10 \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.12"
@@ -144,6 +146,8 @@ docker run -d \
   --network helix_overlay_network \
   --ip 10.100.0.13 \
   --gpus '"device=2"' \
+  -e HELIX_HOST_IP=10.100.0.10 \
+  -v /home/emnets-2/gxq/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.13"
 
@@ -153,6 +157,8 @@ docker run -d \
   --network helix_overlay_network \
   --ip 10.100.0.14 \
   --gpus '"device=3"' \
+  -e HELIX_HOST_IP=10.100.0.10 \
+  -v /home/emnets-2/gxq/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.14"
 ```
@@ -183,7 +189,7 @@ docker exec helix_worker_gpu3_4090 ping -c 3 10.100.0.11
 - **GPU2 (2080Ti)**: 10.100.0.12 - 层10-19
 - **GPU3 (4090)**: 10.100.0.13 - 层20-29
 - **GPU4 (4090)**: 10.100.0.14 - 层30-39
-- **Coordinator**: 使用主机1的物理IP 10.202.210.104 或 10.100.0.1
+- **Coordinator**: 使用10.100.0.10
 
 ## 完整部署流程
 
@@ -194,8 +200,6 @@ docker exec helix_worker_gpu3_4090 ping -c 3 10.100.0.11
 
 编辑 `step1_generate_system_config_qwen3_14b_2x2080ti_2x4090.py`，将IP地址改为：
 ```python
-# 原来的IP地址
-# ip_addrs = ['10.202.210.105', '10.202.210.106', '10.130.151.14', '10.130.151.15']
 
 # 改为overlay网络IP
 ip_addrs = ['10.100.0.11', '10.100.0.12', '10.100.0.13', '10.100.0.14']
@@ -224,11 +228,12 @@ docker run -it --rm \
   --name helix_coordinator \
   --network helix_overlay_network \
   --ip 10.100.0.10 \
+  --gpus all \
   -e HELIX_HOST_IP=10.100.0.10 \
   -v /mnt/lvm-data/home/dataset/sharegpt:/data \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
-  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step2_start_host_qwen3_14b_hetero.py offline maxflow"
+  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step2_start_host_qwen3_14b_hetero.py online maxflow"
 ```
 
 ```
