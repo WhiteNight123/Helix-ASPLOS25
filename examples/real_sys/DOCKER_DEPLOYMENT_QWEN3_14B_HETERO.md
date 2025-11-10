@@ -109,20 +109,22 @@ docker network ls | grep helix_overlay_network
 
 ```bash
 # GPU1 容器 (10.100.0.11)
-docker run -d \
+docker run -d --rm \
   --name helix_worker_gpu1_2080ti \
   --network helix_overlay_network \
   --ip 10.100.0.11 \
   --gpus '"device=5"' \
+  -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.11"
 
 # GPU2 容器 (10.100.0.12)
-docker run -d \
+docker run -d --rm \
   --name helix_worker_gpu2_2080ti \
   --network helix_overlay_network \
   --ip 10.100.0.12 \
   --gpus '"device=6"' \
+  -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.12"
 ```
@@ -217,13 +219,17 @@ Coordinator在容器中运行。
 
 
 ```bash
+```bash
 docker run -it --rm \
   --name helix_coordinator \
   --network helix_overlay_network \
   --ip 10.100.0.10 \
+  -e HELIX_HOST_IP=10.100.0.10 \
   -v /mnt/lvm-data/home/dataset/sharegpt:/data \
+  -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step2_start_host_qwen3_14b_hetero.py offline maxflow"
+```
 
 ```
 

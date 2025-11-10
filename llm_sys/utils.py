@@ -1,4 +1,5 @@
 # 2024.04.24 Yixuan Mei
+import os
 import torch
 import socket
 
@@ -15,7 +16,9 @@ def to_real(node_id: int) -> int:
         return node_id - SIMULATOR_NODE_OFFSET
 
 
-CONFIG_BROADCAST_ADDR = "tcp://10.202.210.104:5000"
+# Support Docker overlay network: use environment variable if set, otherwise use default
+_CONFIG_BROADCAST_IP = os.environ.get('HELIX_HOST_IP', '10.202.210.104')
+CONFIG_BROADCAST_ADDR = f"tcp://{_CONFIG_BROADCAST_IP}:5000"
 
 
 def warm_up():
@@ -26,6 +29,11 @@ def warm_up():
 
 
 def get_local_ip():
+    # First check if IP is provided via environment variable (for Docker overlay network)
+    env_ip = os.environ.get('HELIX_HOST_IP')
+    if env_ip:
+        return env_ip
+    
     # Attempt to connect to an internet host in order to determine the local interface
     try:
         # Create a dummy socket to connect to an Internet IP or DNS
