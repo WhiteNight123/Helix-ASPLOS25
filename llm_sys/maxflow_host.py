@@ -132,7 +132,7 @@ def run_maxflow_host_online(
 
     # ------------------------------------- Online Generator (Poisson arrival with ShareGPT) ------------------------------------ #
     # Load ShareGPT dataset
-    loader = ShareGPTLoader("/mnt/lvm-data/home/dataset/sharegpt/common_en_70k.jsonl")
+    loader = ShareGPTLoader("/data/common_en_70k.jsonl")
     print('Loading ShareGPT dataset into memory...')
     loader.load_data()
     print('ShareGPT dataset loaded successfully!')
@@ -361,7 +361,7 @@ def run_maxflow_host_offline(
 
     # ------------------------------------- Offline Initial (Burst with ShareGPT) ------------------------------------- #
     # Load ShareGPT dataset
-    loader = ShareGPTLoader("/mnt/lvm-data/home/dataset/sharegpt/common_en_70k.jsonl")
+    loader = ShareGPTLoader("/data/common_en_70k.jsonl")
     print('Loading ShareGPT dataset into memory...')
     loader.load_data()
     print('ShareGPT dataset loaded successfully!')

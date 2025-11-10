@@ -218,9 +218,10 @@ Coordinator在容器中运行。
 
 ```bash
 docker run -it --rm \
+  --name helix_coordinator \
   --network helix_overlay_network \
-  --ip 10.100.0.1 \
-  -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
+  --ip 10.100.0.10 \
+  -v /mnt/lvm-data/home/dataset/sharegpt:/data \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step2_start_host_qwen3_14b_hetero.py offline maxflow"
 

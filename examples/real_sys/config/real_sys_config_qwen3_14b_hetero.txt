@@ -1,5 +1,5 @@
 machine_id: 0
-ip_address: 10.100.0.1
+ip_address: 10.100.0.10
 in_nodes: 4
 out_nodes: 1
 start_layer: -1
