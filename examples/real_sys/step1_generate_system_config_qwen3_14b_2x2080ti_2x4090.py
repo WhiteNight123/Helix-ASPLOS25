@@ -22,7 +22,7 @@ def main():
     """
     gen_sys_config(
         # Host IP (coordinator node)
-        host_ip="10.202.210.104",
+        host_ip="10.100.0.1",
         
         # Worker IPs - each GPU needs a unique IP
         # In Docker, you can use macvlan or host network with different IP aliases

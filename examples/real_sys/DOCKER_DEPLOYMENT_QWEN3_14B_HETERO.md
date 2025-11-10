@@ -19,10 +19,11 @@ Coordinator (10.202.210.104) -> GPU1 (2080Ti) -> GPU2 (2080Ti) -> GPU3 (4090) ->
 ## Docker Swarm 网络配置
 
 ### 重要说明
-由于Helix的限制：
+由于Helix的通信机制：
 1. **每个GPU需要独立的IP地址**
-2. **不支持端口映射**
-3. **相邻节点必须能互相访问**
+2. **节点间使用TCP 6000端口通信**（Helix内部通信协议）
+3. **Coordinator使用TCP 5000端口广播配置**
+4. **相邻节点必须能互相访问**
 
 因此使用 **Docker Swarm 的 overlay 网络**来实现跨主机容器通信。
 
@@ -39,13 +40,24 @@ Docker Swarm的overlay网络允许不同主机上的容器在同一虚拟网络�
    - TCP 2377 (集群管理)
    - TCP/UDP 7946 (节点通信)
    - UDP 4789 (overlay网络流量)
+3. 开放Helix通信端口：
+   - TCP 5000 (Coordinator配置广播)
+   - TCP 6000-6010 (节点间通信，根据节点数量调整范围)
 
 ```bash
 # 在两台主机上都执行
+# Docker Swarm端口
 sudo ufw allow 2377/tcp
 sudo ufw allow 7946/tcp
 sudo ufw allow 7946/udp
 sudo ufw allow 4789/udp
+
+# Helix通信端口
+sudo ufw allow 5000/tcp
+sudo ufw allow 6000:6010/tcp
+
+# 重新加载防火墙
+sudo ufw reload
 ```
 
 ### 步骤1: 初始化Docker Swarm
@@ -115,6 +127,12 @@ docker run -d \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.12"
 ```
 
+**注意**：
+- `--gpus '"device=5"'` 和 `'"device=6"'` 需要根据实际GPU编号调整
+- 使用 `nvidia-smi` 查看GPU编号
+- 卷挂载确保容器可以访问代码和模型文件
+- overlay网络自动处理跨主机路由，容器内TCP 6000端口可直接通信
+
 ### 步骤4: 在主机2启动Worker容器 (4090)
 
 ```bash
@@ -123,7 +141,7 @@ docker run -d \
   --name helix_worker_gpu3_4090 \
   --network helix_overlay_network \
   --ip 10.100.0.13 \
-  --gpus '"device=0"' \
+  --gpus '"device=2"' \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.13"
 
@@ -132,11 +150,15 @@ docker run -d \
   --name helix_worker_gpu4_4090 \
   --network helix_overlay_network \
   --ip 10.100.0.14 \
-  --gpus '"device=1"' \
-
+  --gpus '"device=3"' \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.14"
 ```
+
+**注意**：
+- 替换 `/path/to/Helix-ASPLOS25` 和 `/path/to/model` 为主机2上的实际路径
+- GPU设备编号需要根据 `nvidia-smi` 的输出调整
+- 确保两台主机都已加入同一个Docker Swarm，才能访问overlay网络
 
 ### 步骤5: 测试跨主机网络连通性
 
@@ -163,38 +185,6 @@ docker exec helix_worker_gpu3_4090 ping -c 3 10.100.0.11
 
 ## 完整部署流程
 
-### 步骤0: 构建Docker镜像（两台主机都需要）
-
-```bash
-cd /root/Helix-ASPLOS25
-docker build -t myhelix:latest -f- . <<EOF
-FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
-
-RUN apt-get update && apt-get install -y \\
-    python3 python3-pip git wget curl \\
-    && rm -rf /var/lib/apt/lists/*
-
-# 安装conda
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \\
-    bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda && \\
-    rm Miniconda3-latest-Linux-x86_64.sh
-
-ENV PATH=/opt/conda/bin:\$PATH
-
-# 创建runtime环境
-RUN conda create -n runtime python=3.10 -y
-
-WORKDIR /Helix-ASPLOS25
-
-COPY requirements.txt .
-RUN /opt/conda/envs/runtime/bin/pip install -r requirements.txt
-
-COPY . .
-RUN /opt/conda/envs/runtime/bin/pip install -e .
-
-CMD ["/bin/bash"]
-EOF
-```
 
 ### 步骤1: 生成系统配置（在主机1上执行）
 
@@ -223,16 +213,9 @@ python3 step1_generate_system_config_qwen3_14b_2x2080ti_2x4090.py
 
 ### 步骤3: 启动Coordinator（在主机1上执行）
 
-Coordinator可以在宿主机运行，也可以在容器中运行。
+Coordinator在容器中运行。
 
-**方案A - 在宿主机运行（推荐）**：
-```bash
-cd /root/Helix-ASPLOS25/examples/real_sys
-conda activate helix  # 或你的环境名
-python3 step2_start_host_qwen3_14b_hetero.py offline maxflow
-```
 
-**方案B - 在容器中运行**：
 ```bash
 docker run -it --rm \
   --network helix_overlay_network \
@@ -240,6 +223,7 @@ docker run -it --rm \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step2_start_host_qwen3_14b_hetero.py offline maxflow"
+
 ```
 
 ### 步骤4: 启动Workers（按照上述步骤3和4）
@@ -347,12 +331,25 @@ Docker Swarm的overlay网络使用VXLAN隧道技术：
 ### 流水线通信拓扑
 
 ```
-Coordinator (10.100.0.1)
+Coordinator (10.202.210.104:5000) - 配置广播
     ↓
-GPU1 (10.100.0.11) → GPU2 (10.100.0.12) → GPU3 (10.100.0.13) → GPU4 (10.100.0.14)
-    ↓                      ↓                      ↓                      ↓
-返回给Coordinator (all-reduce或point-to-point)
+GPU1 (10.100.0.11:6000) → GPU2 (10.100.0.12:6000) → GPU3 (10.100.0.13:6000) → GPU4 (10.100.0.14:6000)
+    ↓                           ↓                           ↓                           ↓
+返回给Coordinator (TCP通信)
 ```
+
+### Helix通信端口说明
+
+| 端口 | 用途 | 说明 |
+|------|------|------|
+| 5000 | Coordinator配置广播 | 用于向所有Worker节点广播初始化配置 |
+| 6000 | Worker节点接收端口 | 每个Worker在6000端口监听接收数据 |
+| 6001+ | Worker节点发送端口 | 动态分配的发送端口 |
+
+**重要**: 
+- Overlay网络内，容器可以直接通过IP:6000通信，无需端口映射
+- 跨主机通信通过overlay网络自动路由
+- 确保防火墙允许6000-6010端口范围
 
 ## 防火墙配置
 
@@ -395,27 +392,6 @@ ping -c 3 10.130.151.13
 ping -c 3 10.202.210.104
 ```
 
-## 故障排查
-
-### 问题1: Worker无法连接到Coordinator
-- 检查IP地址配置是否正确
-- 验证网络连通性
-- 检查防火墙设置
-- 查看容器日志
-
-### 问题2: GPU无法识别
-```bash
-# 检查宿主机GPU
-nvidia-smi
-
-# 检查容器内GPU
-docker exec helix_worker_gpu1_2080ti nvidia-smi
-```
-
-### 问题3: 内存不足
-- 检查VRAM使用情况
-- 调整KV cache配置
-- 减少batch size
 
 ## 性能优化
 
