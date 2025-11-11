@@ -1,4 +1,5 @@
 # 2024.04.24 Yixuan Mei
+import os
 import os.path
 import time
 import random
@@ -177,6 +178,12 @@ def run_maxflow_host_online(
     llm_host.start_network_threads(CONFIG_BROADCAST_ADDR, host_ip, real_sys_config_file_name, "maxflow")
     time.sleep(20)
     print("[Python] Cluster initialization finished!")
+    
+    # Remove old host log file if it exists
+    host_log_path = '/Helix-ASPLOS25/examples/real_sys/log/host.log'
+    if os.path.exists(host_log_path):
+        os.remove(host_log_path)
+        print(f"[Python] Removed old host log file: {host_log_path}")
     # -------------------------------------------------------------------------------------- #
     ground_zero = time.time()
     next_query_id = 0
@@ -191,7 +198,9 @@ def run_maxflow_host_online(
     while True:
         # get time
         now = time.time() - ground_zero
-        if now > duration + 30:
+        # Stop only when all requests have been sent and all flying queries are finished
+        if now > duration and len(trace) == 0 and len(flying_queries_dict) == 0:
+            print(f"[Python] All requests completed. Exiting gracefully.")
             break
 
         # send new requests into cluster if needed
@@ -237,9 +246,8 @@ def run_maxflow_host_online(
             # time - query id - in/out - phase - context_len - this_iter_processed
             events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
 
-            f = open('host.log', 'a')
-            print(f'request {cur_query_id} is added at {time.time()}', file = f)
-            f.close()
+            with open(host_log_path, 'a') as f:
+                print(f'request {cur_query_id} is added at {time.time()}', file=f)
             
             print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                   f"max_len = {input_length + output_length}")
@@ -250,9 +258,8 @@ def run_maxflow_host_online(
 
         assert len(finished_query_ids) == len(generated_token_ids)
         if len(finished_query_ids) > 0:
-            f = open('host.log', 'a')
-            print(f'recv {len(finished_query_ids)} generated tokens at {time.time()}', file = f)
-            f.close()
+            with open(host_log_path, 'a') as f:
+                print(f'recv {len(finished_query_ids)} generated tokens at {time.time()}', file=f)
         for query_uid in finished_query_ids:
             # first receive the message
             recv_time = time.time() - ground_zero
@@ -263,10 +270,9 @@ def run_maxflow_host_online(
                 events.append((now, query_uid, "in", "prompt", 0, py_on_the_fly_query.input_length + 1))
                 py_on_the_fly_query.processed_tokens += py_on_the_fly_query.input_length + 1
 
-                f = open('host.log', 'a')
-                cur = time.time()
-                print(f'request {query_uid} got its first token at {cur}', file = f)
-                f.close()
+                with open(host_log_path, 'a') as f:
+                    cur = time.time()
+                    print(f'request {query_uid} got its first token at {cur}', file=f)
                 
 
             else:
@@ -275,10 +281,9 @@ def run_maxflow_host_online(
                 events.append((now, query_uid, "in", "decode", py_on_the_fly_query.processed_tokens, 1))
                 py_on_the_fly_query.processed_tokens += 1
 
-            f = open('host.log', 'a')
-            cur = time.time()
-            print(f'request {query_uid} finished an iteration at {cur}', file = f)
-            f.close()
+            with open(host_log_path, 'a') as f:
+                cur = time.time()
+                print(f'request {query_uid} finished an iteration at {cur}', file=f)
                 
             # then we decide whether to send out new messages (decodes)
             max_size = py_on_the_fly_query.input_length + py_on_the_fly_query.output_length
@@ -429,6 +434,12 @@ def run_maxflow_host_offline(
     llm_host.start_network_threads(CONFIG_BROADCAST_ADDR, host_ip, real_sys_config_file_name, "maxflow")
     time.sleep(20)
     print("[Python] Cluster initialization finished!")
+    
+    # Remove old host log file if it exists
+    host_log_path = '/Helix-ASPLOS25/examples/real_sys/log/host.log'
+    if os.path.exists(host_log_path):
+        os.remove(host_log_path)
+        print(f"[Python] Removed old host log file: {host_log_path}")
     # -------------------------------------------------------------------------------------- #
     ground_zero = time.time()
     next_query_id = 0
@@ -444,7 +455,9 @@ def run_maxflow_host_offline(
     while True:
         # get time
         now = time.time() - ground_zero
-        if now > duration + 1:
+        # Stop only when duration is over, all initial requests sent, and all flying queries finished
+        if now > duration and len(initial_requests) == 0 and len(flying_queries_dict) == 0:
+            print(f"[Python] All requests completed. Exiting gracefully.")
             break
 
         # log bottleneck

@@ -4,6 +4,7 @@
 import time
 import llm_worker
 import torch
+import os
 
 from vllm.config import SchedulerConfig, CacheConfig
 from vllm.core.scheduler import SchedulerOutputs
@@ -141,8 +142,21 @@ def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, v
     print(f"[Python] ====================================")
     print(f"[Python] Entering main inference loop...")
 
-    # Extract worker ID from IP address (e.g., 127.0.0.1 -> worker_1)
+    # Extract worker ID from IP address (e.g., 10.100.0.13 -> worker_13)
     worker_id = worker_ip.split('.')[-1]
+    
+    # Use absolute path for log file to ensure it's written to the correct location
+    log_dir = '/Helix-ASPLOS25/examples/real_sys/log'
+    os.makedirs(log_dir, exist_ok=True)
+    log_file_path = os.path.join(log_dir, f'worker_{worker_id}.log')
+    
+    # Remove old log file if it exists
+    if os.path.exists(log_file_path):
+        os.remove(log_file_path)
+        print(f"[Python] Removed old log file: {log_file_path}")
+    
+    print(f"[Python] Log file will be written to: {log_file_path}")
+    
     last_log_time = time.time()
     while True:
         # ------------------------------------------------------------------------------------------- #
@@ -227,10 +241,8 @@ def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, v
         num_free_gpu = engine.scheduler.block_manager.get_num_free_gpu_blocks()
         gpu_cache_usage = 1.0 - (num_free_gpu / num_total_gpu)
 
-        file_name = f'worker_{worker_id}.log'
-        f = open(file_name, 'a')
-        print(f'memory stat log time: {time.time()}, num_free_gpu: {num_free_gpu}, num_total_gpu: {num_total_gpu}, gpu_cache_usage_sys: {gpu_cache_usage * 100}%', file = f)
-        f.close()
+        with open(log_file_path, 'a') as f:
+            print(f'memory stat log time: {time.time()}, num_free_gpu: {num_free_gpu}, num_total_gpu: {num_total_gpu}, gpu_cache_usage_sys: {gpu_cache_usage * 100}%', file=f)
 
         # log kv cache status
         if time.time() > last_log_time + 2:
