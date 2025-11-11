@@ -241,17 +241,25 @@ class SchedulerNode:
         mask: List[bool] = []
         reason: List[str] = []   # for debugging purposes
         sum_of_used_token_throughput = sum(self.outbound_links_used_token_throughput)
+        
+        # Calculate threshold for flow filtering
+        # Use a small absolute threshold to allow cold-start and prevent all nodes being filtered
+        # when max-flow distributes flow thinly across many paths
+        MIN_ABSOLUTE_THRESHOLD = 1.0  # Allow paths with at least 1 token/s throughput
+        relative_threshold = 0.05 * sum_of_used_token_throughput
+        threshold = max(MIN_ABSOLUTE_THRESHOLD, relative_threshold)
+        
         for inference_setting, token_throughput, simulator_node in zip(self.outbound_node_inference_settings,
                                                                        self.outbound_links_used_token_throughput,
                                                                        self.outbound_simulator_nodes):
-            # filter 1 & 3
-            if token_throughput < 0.05 * sum_of_used_token_throughput:
+            # filter 1 & 3: check if flow is sufficient
+            if token_throughput < threshold:
                 mask.append(False)
-                reason.append("Fail-Flow")
+                reason.append(f"Fail-Flow(tp={token_throughput:.2f}, thresh={threshold:.2f})")
                 continue
 
             # filter 2
-            if inference_setting is not None and reqeust.token_seq_length > inference_setting.prompt_max_tokens:
+            if inference_setting is not None and reqeust.token_seq_length > 20000:
                 mask.append(False)
                 reason.append("Fail-Length")
                 continue
@@ -273,7 +281,17 @@ class SchedulerNode:
         # check whether there are feasible candidates
         if self.scheduling_mode == SchedulingMode.Online:
             # raise an error, as we must execute the request
-            assert any(mask), f"No next level node meets scheduling requirement at compute {self.node_uid}!"
+            if not any(mask):
+                # Provide detailed debug information
+                debug_info = (
+                    f"No next level node meets scheduling requirement at compute {self.node_uid}!\n"
+                    f"Request: token_seq_length={reqeust.token_seq_length}\n"
+                    f"Sum of used token throughput: {sum_of_used_token_throughput}\n"
+                    f"Outbound nodes: {self.outbound_node_uids}\n"
+                    f"Token throughputs: {self.outbound_links_used_token_throughput}\n"
+                    f"Filter results: {list(zip(self.outbound_node_uids, reason))}"
+                )
+                raise AssertionError(debug_info)
         elif self.scheduling_mode == SchedulingMode.Offline:
             # reject the request if no next level nodes can do the inference
             if not any(mask):

@@ -109,18 +109,19 @@ docker network ls | grep helix_overlay_network
 
 ```bash
 # GPU1 容器 (10.100.0.11)
-docker run -d --rm \
+docker run -d \
   --name helix_worker_gpu1_2080ti \
   --network helix_overlay_network \
   --ip 10.100.0.11 \
   --gpus '"device=5"' \
   -e HELIX_HOST_IP=10.100.0.10 \
+  -e VLLM_LOG_LEVEL=debug \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.11"
 
 # GPU2 容器 (10.100.0.12)
-docker run -d --rm \
+docker run -d \
   --name helix_worker_gpu2_2080ti \
   --network helix_overlay_network \
   --ip 10.100.0.12 \
@@ -130,12 +131,6 @@ docker run -d --rm \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.12"
 ```
-
-**注意**：
-- `--gpus '"device=5"'` 和 `'"device=6"'` 需要根据实际GPU编号调整
-- 使用 `nvidia-smi` 查看GPU编号
-- 卷挂载确保容器可以访问代码和模型文件
-- overlay网络自动处理跨主机路由，容器内TCP 6000端口可直接通信
 
 ### 步骤4: 在主机2启动Worker容器 (4090)
 
@@ -164,8 +159,6 @@ docker run -d \
 ```
 
 **注意**：
-- 替换 `/path/to/Helix-ASPLOS25` 和 `/path/to/model` 为主机2上的实际路径
-- GPU设备编号需要根据 `nvidia-smi` 的输出调整
 - 确保两台主机都已加入同一个Docker Swarm，才能访问overlay网络
 
 ### 步骤5: 测试跨主机网络连通性
@@ -221,8 +214,6 @@ python3 step1_generate_system_config_qwen3_14b_2x2080ti_2x4090.py
 
 Coordinator在容器中运行。
 
-
-```bash
 ```bash
 docker run -it --rm \
   --name helix_coordinator \
@@ -234,7 +225,6 @@ docker run -it --rm \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
   bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step2_start_host_qwen3_14b_hetero.py online maxflow"
-```
 
 ```
 
@@ -276,158 +266,6 @@ docker exec helix_worker_gpu3_4090 ping -c 3 10.100.0.11  # GPU1
 cd /root/Helix-ASPLOS25/examples/real_sys
 python3 step4_parse_results.py
 ```
-
-
-
-## Docker Swarm 管理命令
-
-### 查看Swarm状态
-
-```bash
-# 查看节点
-docker node ls
-
-# 查看网络
-docker network ls
-docker network inspect helix_overlay_network
-
-# 查看服务
-docker service ls
-```
-
-### 离开Swarm集群
-
-如果需要重新配置：
-
-```bash
-# 在worker节点上
-docker swarm leave
-
-# 在manager节点上
-docker swarm leave --force
-```
-
-### 故障恢复
-
-如果overlay网络出现问题：
-
-```bash
-# 在manager节点上删除并重建网络
-docker network rm helix_overlay_network
-docker network create \
-  --driver overlay \
-  --subnet=10.100.0.0/16 \
-  --attachable \
-  helix_overlay_network
-```
-
-## 网络架构说明
-
-### Overlay网络工作原理
-
-Docker Swarm的overlay网络使用VXLAN隧道技术：
-- 容器之间的通信通过VXLAN封装
-- 跨主机流量在UDP 4789端口传输
-- 网络对容器透明，容器看到的是同一个虚拟网络
-
-### IP地址规划
-
-| 组件 | IP地址 | 物理位置 | GPU设备 | 推理层 |
-|------|--------|---------|---------|--------|
-| GPU1 | 10.100.0.11 | 主机1 | device=5 (2080Ti) | 0-9 |
-| GPU2 | 10.100.0.12 | 主机1 | device=6 (2080Ti) | 10-19 |
-| GPU3 | 10.100.0.13 | 主机2 | device=0 (4090) | 20-29 |
-| GPU4 | 10.100.0.14 | 主机2 | device=1 (4090) | 30-39 |
-| Coordinator | 10.100.0.1 (可选) | 主机1 | - | - |
-
-### 流水线通信拓扑
-
-```
-Coordinator (10.202.210.104:5000) - 配置广播
-    ↓
-GPU1 (10.100.0.11:6000) → GPU2 (10.100.0.12:6000) → GPU3 (10.100.0.13:6000) → GPU4 (10.100.0.14:6000)
-    ↓                           ↓                           ↓                           ↓
-返回给Coordinator (TCP通信)
-```
-
-### Helix通信端口说明
-
-| 端口 | 用途 | 说明 |
-|------|------|------|
-| 5000 | Coordinator配置广播 | 用于向所有Worker节点广播初始化配置 |
-| 6000 | Worker节点接收端口 | 每个Worker在6000端口监听接收数据 |
-| 6001+ | Worker节点发送端口 | 动态分配的发送端口 |
-
-**重要**: 
-- Overlay网络内，容器可以直接通过IP:6000通信，无需端口映射
-- 跨主机通信通过overlay网络自动路由
-- 确保防火墙允许6000-6010端口范围
-
-## 防火墙配置
-
-### 主机间防火墙规则
-
-两台主机之间必须开放以下端口：
-
-```bash
-# 在主机1和主机2都执行
-sudo ufw allow from 10.202.210.104
-sudo ufw allow from 10.130.151.13
-
-# 或者直接允许对方的整个网段
-sudo ufw allow from 10.202.210.0/24
-sudo ufw allow from 10.130.151.0/24
-
-# Docker Swarm必需端口
-sudo ufw allow 2377/tcp    # 集群管理通信
-sudo ufw allow 7946/tcp    # 节点间通信
-sudo ufw allow 7946/udp    # 节点间通信
-sudo ufw allow 4789/udp    # overlay网络数据平面(VXLAN)
-
-# 如果启用了防火墙，确保SSH可用
-sudo ufw allow 22/tcp
-
-# 重新加载防火墙
-sudo ufw reload
-sudo ufw status
-```
-
-### 测试物理网络连通性
-
-在配置Swarm之前，先确保两台主机之间可以互相访问：
-
-```bash
-# 从主机1测试主机2
-ping -c 3 10.130.151.13
-
-# 从主机2测试主机1
-ping -c 3 10.202.210.104
-```
-
-
-## 性能优化
-
-### 调整参数
-在 `step2_start_host_qwen3_14b_hetero.py` 中：
-- `initial_launch_num`: 初始请求数量
-- `avg_throughput`: 平均吞吐量
-- `duration`: 运行时长
-
-### 监控性能
-```bash
-# 监控GPU使用
-watch -n 1 nvidia-smi
-
-# 查看结果
-python3 step4_parse_results.py
-```
-
-## 注意事项
-
-1. **层分配**: 当前配置为每GPU 10层，可根据显存调整
-2. **网络延迟**: 跨主机通信延迟较大，影响性能
-3. **模型加载**: 确保每个worker都能访问模型文件
-4. **资源限制**: 2080Ti显存11GB，4090显存24GB，注意不要超限
 
 ## 文件清单
 

@@ -47,7 +47,7 @@ def qwen3_14b_hetero_maxflow_online():
         real_sys_config_file_name="./config/real_sys_config_qwen3_14b_hetero.txt",
         # throughput
         duration=300,
-        avg_rps=0.5,
+        avg_rps=1,
         # result
         result_logging_dir="./result/qwen3_14b_hetero_maxflow_online/"
     )

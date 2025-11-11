@@ -46,7 +46,7 @@ def qwen3_14b_maxflow_online():
         real_sys_config_file_name="./config/real_sys_config.txt",
         # throughput
         duration=300,
-        avg_throughput=200,
+        avg_rps=1,
         # result
         result_logging_dir="./result/qwen3_14b_4gpu_maxflow_online/"
     )

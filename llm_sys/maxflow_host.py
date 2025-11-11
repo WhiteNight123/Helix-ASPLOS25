@@ -236,8 +236,10 @@ def run_maxflow_host_online(
                                  end_layers))
             # time - query id - in/out - phase - context_len - this_iter_processed
             events.append((now, cur_query_id, "out", "prompt", 0, input_length + 1))
-            
 
+            f = open('host.log', 'a')
+            print(f'request {cur_query_id} is added at {time.time()}', file = f)
+            f.close()
             
             print(f"Send out new query {cur_query_id}, input len = {input_length}, "
                   f"max_len = {input_length + output_length}")
@@ -245,6 +247,12 @@ def run_maxflow_host_online(
         # get finished requests
         now = time.time() - ground_zero
         finished_query_ids, generated_token_ids, routes, num_layers = llm_host.gather_finished_requests()
+
+        assert len(finished_query_ids) == len(generated_token_ids)
+        if len(finished_query_ids) > 0:
+            f = open('host.log', 'a')
+            print(f'recv {len(finished_query_ids)} generated tokens at {time.time()}', file = f)
+            f.close()
         for query_uid in finished_query_ids:
             # first receive the message
             recv_time = time.time() - ground_zero
@@ -254,6 +262,11 @@ def run_maxflow_host_online(
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "in", "prompt", 0, py_on_the_fly_query.input_length + 1))
                 py_on_the_fly_query.processed_tokens += py_on_the_fly_query.input_length + 1
+
+                f = open('host.log', 'a')
+                cur = time.time()
+                print(f'request {query_uid} got its first token at {cur}', file = f)
+                f.close()
                 
 
             else:
@@ -261,6 +274,11 @@ def run_maxflow_host_online(
                 # time - query id - in/out - phase - context_len - this_iter_processed
                 events.append((now, query_uid, "in", "decode", py_on_the_fly_query.processed_tokens, 1))
                 py_on_the_fly_query.processed_tokens += 1
+
+            f = open('host.log', 'a')
+            cur = time.time()
+            print(f'request {query_uid} finished an iteration at {cur}', file = f)
+            f.close()
                 
             # then we decide whether to send out new messages (decodes)
             max_size = py_on_the_fly_query.input_length + py_on_the_fly_query.output_length
@@ -297,15 +315,15 @@ def run_maxflow_host_online(
 
     # save logging files
     print(f"Queries still flying: {flying_queries_dict.keys()}.")
-    query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
-    events_file_name = os.path.join(result_logging_dir, "events.txt")
+    # query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
+    # events_file_name = os.path.join(result_logging_dir, "events.txt")
     
-    with open(query_routes_file_name, "w") as f:
-        for item in query_routes:
-            f.write(f"{item}\n")
-    with open(events_file_name, "w") as f:
-        for item in events:
-            f.write(f"{item}\n")
+    # with open(query_routes_file_name, "w") as f:
+    #     for item in query_routes:
+    #         f.write(f"{item}\n")
+    # with open(events_file_name, "w") as f:
+    #     for item in events:
+    #         f.write(f"{item}\n")
 
 
 
@@ -656,12 +674,12 @@ def run_maxflow_host_offline(
 
     # save logging files
     print(f"Queries still flying: {flying_queries_dict.keys()}.")
-    query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
-    events_file_name = os.path.join(result_logging_dir, "events.txt")
+    # query_routes_file_name = os.path.join(result_logging_dir, "query_route.txt")
+    # events_file_name = os.path.join(result_logging_dir, "events.txt")
     
-    with open(query_routes_file_name, "w") as f:
-        for item in query_routes:
-            f.write(f"{item}\n")
-    with open(events_file_name, "w") as f:
-        for item in events:
-            f.write(f"{item}\n")
+    # with open(query_routes_file_name, "w") as f:
+    #     for item in query_routes:
+    #         f.write(f"{item}\n")
+    # with open(events_file_name, "w") as f:
+    #     for item in events:
+    #         f.write(f"{item}\n")
