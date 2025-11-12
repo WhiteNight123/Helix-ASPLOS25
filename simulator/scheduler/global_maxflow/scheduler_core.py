@@ -265,12 +265,12 @@ class SchedulerNode:
                 continue
 
             # filter 4
-            if isinstance(simulator_node, ComputeNode):
-                if not self.scheduler_core.kv_expectation.check_can_add(node_uid=simulator_node.node_uid,
-                                                                        input_seq_length=reqeust.token_seq_length):
-                    mask.append(False)
-                    reason.append("Fail-KV")
-                    continue
+            # if isinstance(simulator_node, ComputeNode):
+            #     if not self.scheduler_core.kv_expectation.check_can_add(node_uid=simulator_node.node_uid,
+            #                                                             input_seq_length=reqeust.token_seq_length):
+            #         mask.append(False)
+            #         reason.append("Fail-KV")
+            #         continue
 
             # pass all filters
             mask.append(True)

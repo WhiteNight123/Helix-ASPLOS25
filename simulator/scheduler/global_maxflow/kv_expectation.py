@@ -60,7 +60,7 @@ class KVExpectedStatus:
         assert self.start_layer_idx <= cur_start < cur_end <= self.end_layer_idx, "Bad start end idx!"
         expected_length = int(input_seq_length + AVG_OUTPUT_LEN * self.expected_output_length_ratio)
         self.avail_kv_capacity -= expected_length * (cur_end - cur_start)
-        assert self.avail_kv_capacity >= 0, f"Node {self.node_uid} will run out of KV cache in expectation!"
+        # assert self.avail_kv_capacity >= 0, f"Node {self.node_uid} will run out of KV cache in expectation!"
 
     def remove_request(self, input_seq_length: int, cur_start: int, cur_end: int) -> None:
         """

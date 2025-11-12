@@ -118,7 +118,7 @@ def run_maxflow_host_online(
     simulator = ClusterSimulator(model_name=model_name, machine_num_dict=machine_num_dict)
     simulator.from_ini_file(config_file_name=cluster_file_path)
     scheduler_args = {
-        "kv_param": KVParameters(expected_kv_hwm=0.9, expected_output_length_ratio=0.6),
+        "kv_param": KVParameters(expected_kv_hwm=0.8, expected_output_length_ratio=0.6),
         "scheduling_mode": SchedulingMode.Online,
     }
     simulator.init_scheduler(scheduling_method=SchedulingMethod.MaxFlow, args=scheduler_args)
@@ -160,6 +160,10 @@ def run_maxflow_host_online(
         qa_index = sequence_shuffled[sequence_index]
         input_length = input_tokens_list[sequence_index]
         output_length = output_tokens_list[sequence_index]
+        input_length = min(2047, input_length)
+        # Ensure total max_length doesn't exceed 2048
+        if input_length + output_length > 2048:
+            output_length = max(1, 2048 - input_length)
         
         trace.append((current_time, input_length, output_length, qa_index))
         
@@ -180,7 +184,7 @@ def run_maxflow_host_online(
     print("[Python] Cluster initialization finished!")
     
     # Remove old host log file if it exists
-    host_log_path = '/Helix-ASPLOS25/examples/real_sys/log/host.log'
+    host_log_path = '/root/Helix-ASPLOS25/examples/real_sys/log/host.log'
     if os.path.exists(host_log_path):
         os.remove(host_log_path)
         print(f"[Python] Removed old host log file: {host_log_path}")
@@ -373,7 +377,7 @@ def run_maxflow_host_offline(
     simulator = ClusterSimulator(model_name=model_name, machine_num_dict=machine_num_dict)
     simulator.from_ini_file(config_file_name=cluster_file_path)
     scheduler_args = {
-        "kv_param": KVParameters(expected_kv_hwm=0.85, expected_output_length_ratio=1),
+        "kv_param": KVParameters(expected_kv_hwm=0.8, expected_output_length_ratio=1),
         "scheduling_mode": SchedulingMode.Offline,
     }
     assert feeding_hwm <= 0.8, "Feed high water mark should be smaller than KV expected high water mark!"

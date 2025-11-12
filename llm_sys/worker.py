@@ -22,7 +22,7 @@ import llm_sys.engine.qwen3
 import llm_sys.utils as utils
 
 
-def init_engine(layer_ids, model_name, vram_usage=0.9, quantization=None):
+def init_engine(layer_ids, model_name, vram_usage=0.8, quantization=None):
     """
     Initialize the pipeline stage engine.
     
@@ -34,9 +34,10 @@ def init_engine(layer_ids, model_name, vram_usage=0.9, quantization=None):
     """
     engine_args = EngineArgs(model=model_name, block_size=16,
                              load_format="dummy", enforce_eager=True,
-                             swap_space=8, max_num_batched_tokens=4096,
+                             swap_space=8, max_num_batched_tokens=2048,
                              gpu_memory_utilization=vram_usage, dtype="float16",
-                             quantization=quantization)
+                             quantization=quantization, max_num_seqs=256,
+                             max_model_len=2048)
 
     engine = PipelineStageEngine.from_engine_args(engine_args, layer_ids)
     return engine
@@ -92,7 +93,7 @@ def run_and_submit(engine, start_idx, end_idx, is_last_layer, hidden_size, force
     return parsed_prompt
 
 
-def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.9, quantization=None):
+def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.8, quantization=None):
     # warm up gpu and initialize llm_sys
     print("[Python] Starting worker initialization...")
     utils.warm_up()
@@ -124,21 +125,28 @@ def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, v
     total_gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)  # Convert to GB
     # Get currently allocated memory (model weights)
     allocated_memory = torch.cuda.memory_allocated(0) / (1024 ** 3)  # Convert to GB
-    # Calculate KV cache size
+    
+    # Calculate KV cache size from vLLM's cache engine
+    # The cache engine stores the actual GPU blocks
     num_gpu_blocks = engine.cache_config.num_gpu_blocks
     block_size = engine.cache_config.block_size
-    num_layers = engine.model_config.get_num_layers(engine.parallel_config)
-    num_heads = engine.model_config.get_num_kv_heads(engine.parallel_config)
+    num_layers = len(layer_ids)
+    num_kv_heads = engine.model_config.get_num_kv_heads(engine.parallel_config)
     head_size = engine.model_config.get_head_size()
-    # KV cache size per block = block_size * num_layers * 2 (K and V) * num_heads * head_size * dtype_size (2 bytes for fp16)
-    kv_cache_size_per_block = block_size * num_layers * 2 * num_heads * head_size * 2 / (1024 ** 3)  # Convert to GB
-    total_kv_cache_size = num_gpu_blocks * kv_cache_size_per_block
+    
+    # IMPORTANT: In vLLM's layerwise implementation, each block stores KV cache for ONLY 1 layer
+    # (see worker.py line 84: model_config.get_num_layers = lambda _: 1)
+    # Each block stores: block_size tokens * 1 layer * 2 (K and V) * num_kv_heads * head_size * 2 bytes (fp16)
+    bytes_per_block = block_size * 1 * 2 * num_kv_heads * head_size * 2
+    total_kv_cache_size = (num_gpu_blocks * bytes_per_block) / (1024 ** 3)  # Convert to GB
     
     print(f"[Python] ========== Memory Usage ==========")
     print(f"[Python] Total GPU Memory: {total_gpu_memory:.2f} GB")
     print(f"[Python] Model Weights: {allocated_memory:.2f} GB")
-    print(f"[Python] KV Cache Reserved: {total_kv_cache_size:.2f} GB")
-    print(f"[Python] KV Cache Blocks: {num_gpu_blocks}")
+    print(f"[Python] KV Cache Reserved: {total_kv_cache_size:.2f} GB ({num_gpu_blocks} blocks)")
+    print(f"[Python]   - Block size: {block_size} tokens")
+    print(f"[Python]   - Per block (1 layer): {bytes_per_block / (1024**2):.4f} MB")
+    print(f"[Python]   - Layers on this worker: {num_layers}")
     print(f"[Python] ====================================")
     print(f"[Python] Entering main inference loop...")
 
@@ -241,11 +249,12 @@ def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, v
         num_free_gpu = engine.scheduler.block_manager.get_num_free_gpu_blocks()
         gpu_cache_usage = 1.0 - (num_free_gpu / num_total_gpu)
 
-        with open(log_file_path, 'a') as f:
-            print(f'memory stat log time: {time.time()}, num_free_gpu: {num_free_gpu}, num_total_gpu: {num_total_gpu}, gpu_cache_usage_sys: {gpu_cache_usage * 100}%', file=f)
-
+        
         # log kv cache status
         if time.time() > last_log_time + 2:
+            with open(log_file_path, 'a') as f:
+                print(f'memory stat log time: {time.time()}, num_free_gpu: {num_free_gpu}, num_total_gpu: {num_total_gpu}, gpu_cache_usage_sys: {gpu_cache_usage * 100}%', file=f)
+
             last_log_time = time.time()
             # GPU KV Cache Usage in %.
             num_total_gpu = engine.cache_config.num_gpu_blocks
