@@ -14,7 +14,7 @@ docker rm -f helix_worker_gpu1_2080ti helix_worker_gpu2_2080ti helix_worker_gpu3
 echo "Starting worker containers..."
 for i in {1..4}; do
   gpu_id=$((i-1))
-  ip="10.100.0.$((10 + i))"
+  ip="10.0.1.$((10 + i))"
   name="helix_worker_gpu${i}_2080ti"
   echo "Launching $name on GPU $gpu_id with IP $ip"
   log_file_container="$LOG_DIR_CONTAINER/${name}.log"
@@ -23,10 +23,10 @@ for i in {1..4}; do
 
   docker run -d \
     --name "$name" \
-    --network helix_overlay_network \
+    --network test_heter \
     --ip "$ip" \
     --gpus "device=$gpu_id" \
-    -e HELIX_HOST_IP=10.100.0.10 \
+    -e HELIX_HOST_IP=10.0.1.10 \
     -e VLLM_LOG_LEVEL=debug \
     -v "$REPO_ROOT":/Helix-ASPLOS25 \
     myhelix:latest \
@@ -38,10 +38,10 @@ done
 echo "Starting coordinator..."
 docker run -it --rm \
   --name helix_coordinator \
-  --network helix_overlay_network \
-  --ip 10.100.0.10 \
+  --network test_heter \
+  --ip 10.0.1.10 \
   --gpus all \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -v /mnt/lvm-data/home/dataset/sharegpt:/data \
   -v "$REPO_ROOT":/Helix-ASPLOS25 \
   myhelix:latest \
