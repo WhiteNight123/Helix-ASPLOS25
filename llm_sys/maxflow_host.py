@@ -158,8 +158,10 @@ def run_maxflow_host_online(
             sequence_index = 0
         
         qa_index = sequence_shuffled[sequence_index]
-        input_length = input_tokens_list[sequence_index]
-        output_length = output_tokens_list[sequence_index]
+        # input_length = input_tokens_list[sequence_index]
+        # output_length = output_tokens_list[sequence_index]
+        input_length = 512
+        output_length = 256
         input_length = min(2047, input_length)
         # Ensure total max_length doesn't exceed 2048
         if input_length + output_length > 2048:
@@ -184,7 +186,7 @@ def run_maxflow_host_online(
     print("[Python] Cluster initialization finished!")
     
     # Remove old host log file if it exists
-    host_log_path = '/root/Helix-ASPLOS25/examples/real_sys/log/host.log'
+    host_log_path = '/Helix-ASPLOS25/examples/real_sys/log/host.log'
     if os.path.exists(host_log_path):
         os.remove(host_log_path)
         print(f"[Python] Removed old host log file: {host_log_path}")

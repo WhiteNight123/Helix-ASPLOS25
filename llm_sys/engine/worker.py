@@ -1,5 +1,6 @@
 import copy
 import os
+import time
 from typing import Dict, List, Optional
 
 import torch
@@ -32,6 +33,7 @@ class LayerwiseWorker(Worker):
         vision_language_config: Optional[VisionLanguageConfig] = None,
         kv_cache_dtype: Optional[str] = "auto",
         is_driver_worker: bool=True,
+        worker_id: Optional[str] = None,
     ) -> None:
         super().__init__(model_config, parallel_config, scheduler_config,
                          device_config, local_rank, rank,
@@ -48,6 +50,14 @@ class LayerwiseWorker(Worker):
             kv_cache_dtype=kv_cache_dtype,
             is_driver_worker=is_driver_worker,
             vision_language_config=vision_language_config)
+        
+        # Store worker_id for logging (use rank as fallback for backward compatibility)
+        self.worker_id = worker_id if worker_id is not None else str(rank)
+        
+        # Remove old log file if it exists
+        log_file = f'server{self.worker_id}.log'
+        if os.path.exists(log_file):
+            os.remove(log_file)
 
     def init_device(self) -> None:
         if self.device_config.device.type == "cuda":
@@ -110,14 +120,70 @@ class LayerwiseWorker(Worker):
         assert blocks_to_swap_out is not None
         assert blocks_to_copy is not None
 
+        # Open log file for instrumentation
+        if seq_group_metadata_list is not None and len(seq_group_metadata_list) > 0:
+            file_name = f'server{self.worker_id}.log'
+            f = open(file_name, 'a')
+            
+            virtual_engine = layer_id
+            batch = layer_id
+            batch_size = num_seq_groups
+            
+            is_prefill = seq_group_metadata_list[0].is_prompt
+            cur_stage = 'prefill' if is_prefill else 'decode'
+            
+            # Log recv (data arrival from previous layer or host)
+            print(f'{virtual_engine} recv at {time.time()}', file=f)
+            
+            # Log request arrivals at worker
+            torch.cuda.synchronize()
+            cur = time.time()
+            for seq_group_metadata in seq_group_metadata_list:
+                cur_request_id = seq_group_metadata.request_id
+                print(f'request {cur_request_id} arrives at worker at {cur}', file=f)
+
         self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy)
 
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:
             return {}
 
+                # Log compute starts
+        if seq_group_metadata_list is not None and len(seq_group_metadata_list) > 0:
+            file_name = f'server{self.worker_id}.log'
+            f = open(file_name, 'a')
+            
+            virtual_engine = layer_id
+            batch = layer_id
+            is_prefill = seq_group_metadata_list[0].is_prompt
+            cur_stage = 'prefill' if is_prefill else 'decode'
+            
+            # Log compute start with GPU sync
+            torch.cuda.synchronize()
+            cur = time.time()
+            print(f'{virtual_engine} {batch} compute starts ({cur_stage}) at {cur}', file=f)
+            
+            for seq_group_metadata in seq_group_metadata_list:
+                cur_request_id = seq_group_metadata.request_id
+                print(f'request {cur_request_id} starts to compute ({cur_stage}) on worker at {cur}', file=f)
+
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache, layer_id)
+        
+        # Log compute end and transmission
+        if seq_group_metadata_list is not None and len(seq_group_metadata_list) > 0:
+            torch.cuda.synchronize()
+            cur = time.time()
+            for seq_group_metadata in seq_group_metadata_list:
+                cur_request_id = seq_group_metadata.request_id
+                print(f'request {cur_request_id} finishes computing ({cur_stage}) on worker at {cur}', file=f)
+            print(f'{batch} {batch_size} compute ends ({cur_stage}) at {time.time()}', file=f)
+            
+            # Log transmission start (before data is sent to next layer/host)
+            print(f'{virtual_engine} trans starts at {time.time()}', file=f)
+            
+            f.close()
+        
         return output
 
     def get_cache_block_size_bytes(self, block_size, cache_dtype):

@@ -46,8 +46,8 @@ def qwen3_14b_hetero_maxflow_online():
         simulator_cluster_file_name="./layout/simulator_cluster_2x2080ti_2x4090.ini",
         real_sys_config_file_name="./config/real_sys_config_qwen3_14b_hetero.txt",
         # throughput
-        duration=300,
-        avg_rps=3,
+        duration=60,
+        avg_rps=1,
         # result
         result_logging_dir="./result/qwen3_14b_hetero_maxflow_online/"
     )

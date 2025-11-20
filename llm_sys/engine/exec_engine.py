@@ -1,3 +1,4 @@
+import os
 import time
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
@@ -47,6 +48,7 @@ class PipelineStageGpuExecutor(GPUExecutor):
             vision_language_config=self.vision_language_config,
             kv_cache_dtype=self.cache_config.cache_dtype,
             is_driver_worker=True,
+            worker_id=getattr(self.model_config, 'worker_id', None),
         )
         self.driver_worker.init_device()
         self.driver_worker.load_model()

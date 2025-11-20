@@ -1,0 +1,35 @@
+machine_id: 0
+ip_address: 10.100.0.10
+in_nodes: 4
+out_nodes: 1
+start_layer: -1
+end_layer: -1
+
+machine_id: 1
+ip_address: 10.100.0.11
+in_nodes: 0
+out_nodes: 2
+start_layer: 0
+end_layer: 5
+
+machine_id: 2
+ip_address: 10.100.0.12
+in_nodes: 1
+out_nodes: 3
+start_layer: 5
+end_layer: 10
+
+machine_id: 3
+ip_address: 10.100.0.13
+in_nodes: 2
+out_nodes: 4
+start_layer: 10
+end_layer: 25
+
+machine_id: 4
+ip_address: 10.100.0.14
+in_nodes: 3
+out_nodes: 0
+start_layer: 25
+end_layer: 40
+
