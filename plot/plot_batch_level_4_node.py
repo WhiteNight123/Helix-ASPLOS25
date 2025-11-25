@@ -226,8 +226,8 @@ TRANSFER_BAR_HEIGHT = 0.2  # 传输条高度（y轴单位）
 ALPHA = 0.9
 
 # 设置要显示的时间范围（根据实际数据调整）
-start_time = 1763548560.238678
-end_time = 1763548560.938678
+start_time = 1763639769.831921
+end_time = 1763639771.231921
 
 # 归一化时间范围
 norm_start = normalize(start_time)

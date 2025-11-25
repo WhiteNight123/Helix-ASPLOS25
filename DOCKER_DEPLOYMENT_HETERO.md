@@ -91,14 +91,14 @@ docker node ls
 ```bash
 docker network create \
   --driver overlay \
-  --subnet=10.100.0.0/16 \
+  --subnet=10.0.1.0/16 \
   --attachable \
   helix_overlay_network
 ```
 
 注意：
 - `--attachable` 允许普通容器连接到这个网络（不仅是服务）
-- 使用独立的子网 10.100.0.0/16 避免与物理网络冲突
+- 使用独立的子网 10.0.1.0/16 避免与物理网络冲突
 
 验证网络创建：
 ```bash
@@ -108,78 +108,78 @@ docker network ls | grep helix_overlay_network
 ### 步骤3: 在主机1启动Worker容器 (2080Ti)
 
 ```bash
-# GPU1 容器 (10.100.0.11)
+# GPU1 容器 (10.0.1.11)
 docker run -d \
   --name helix_worker_gpu1_2080ti \
-  --network helix_overlay_network \
-  --ip 10.100.0.11 \
+  --network test_heter \
+  --ip 10.0.1.11 \
   --gpus '"device=0"' \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -e VLLM_LOG_LEVEL=debug \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
-  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.11"
+  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.0.1.11"
 
-# GPU2 容器 (10.100.0.12)
+# GPU2 容器 (10.0.1.12)
 docker run -d \
   --name helix_worker_gpu2_2080ti \
-  --network helix_overlay_network \
-  --ip 10.100.0.12 \
+  --network test_heter \
+  --ip 10.0.1.12 \
   --gpus '"device=1"' \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
-  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.12"
+  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.0.1.12"
 
-  # GPU3 容器 (10.100.0.13)
+  # GPU3 容器 (10.0.1.13)
 docker run -d \
   --name helix_worker_gpu3_2080ti \
-  --network helix_overlay_network \
-  --ip 10.100.0.13 \
+  --network test_heter \
+  --ip 10.0.1.13 \
   --gpus '"device=2"' \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
-  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.13"
+  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.0.1.13"
 
-  # GPU4 容器 (10.100.0.14)
+  # GPU4 容器 (10.0.1.14)
 docker run -d \
   --name helix_worker_gpu4_2080ti \
-  --network helix_overlay_network \
-  --ip 10.100.0.14 \
+  --network test_heter \
+  --ip 10.0.1.14 \
   --gpus '"device=3"' \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
-  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.14"
+  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.0.1.14"
 ```
 
 ### 步骤4: 在主机2启动Worker容器 (4090)
 
 ```bash
-# GPU3 容器 (10.100.0.13)
+# GPU3 容器 (10.0.1.13)
 docker run -d \
   --name helix_worker_gpu3_4090 \
-  --network helix_overlay_network \
-  --ip 10.100.0.13 \
+  --network test_heter \
+  --ip 10.0.1.13 \
   --gpus '"device=2"' \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -e VLLM_LOG_LEVEL=debug \
   -v /home/emnets-2/gxq/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
-  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.13"
+  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.0.1.13"
 
-# GPU4 容器 (10.100.0.14)
+# GPU4 容器 (10.0.1.14)
 docker run -d \
   --name helix_worker_gpu4_4090 \
-  --network helix_overlay_network \
-  --ip 10.100.0.14 \
+  --network test_heter \
+  --ip 10.0.1.14 \
   --gpus '"device=3"' \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -e VLLM_LOG_LEVEL=debug \
   -v /home/emnets-2/gxq/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
-  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.100.0.14"
+  bash -c "cd /Helix-ASPLOS25/examples/real_sys && /opt/conda/envs/runtime/bin/python3 step3_start_worker_qwen3_14b_hetero.py maxflow 10.0.1.14"
 ```
 
 **注意**：
@@ -189,24 +189,24 @@ docker run -d \
 
 ```bash
 # 从主机1的GPU1容器ping主机2的GPU3容器
-docker exec helix_worker_gpu1_2080ti ping -c 3 10.100.0.13
+docker exec helix_worker_gpu1_2080ti ping -c 3 10.0.1.13
 
 # 从主机1的GPU1容器ping主机2的GPU4容器
-docker exec helix_worker_gpu1_2080ti ping -c 3 10.100.0.14
+docker exec helix_worker_gpu1_2080ti ping -c 3 10.0.1.14
 
 # 从主机2的GPU3容器ping主机1的GPU1容器
-docker exec helix_worker_gpu3_4090 ping -c 3 10.100.0.11
+docker exec helix_worker_gpu3_4090 ping -c 3 10.0.1.11
 ```
 
 ### IP地址分配方案
 
 由于使用overlay网络，IP地址需要更新：
 
-- **GPU1 (2080Ti)**: 10.100.0.11 - 层0-9
-- **GPU2 (2080Ti)**: 10.100.0.12 - 层10-19
-- **GPU3 (4090)**: 10.100.0.13 - 层20-29
-- **GPU4 (4090)**: 10.100.0.14 - 层30-39
-- **Coordinator**: 使用10.100.0.10
+- **GPU1 (2080Ti)**: 10.0.1.11 - 层0-9
+- **GPU2 (2080Ti)**: 10.0.1.12 - 层10-19
+- **GPU3 (4090)**: 10.0.1.13 - 层20-29
+- **GPU4 (4090)**: 10.0.1.14 - 层30-39
+- **Coordinator**: 使用10.0.1.10
 
 ## 完整部署流程
 
@@ -219,7 +219,7 @@ docker exec helix_worker_gpu3_4090 ping -c 3 10.100.0.11
 ```python
 
 # 改为overlay网络IP
-ip_addrs = ['10.100.0.11', '10.100.0.12', '10.100.0.13', '10.100.0.14']
+ip_addrs = ['10.0.1.11', '10.0.1.12', '10.0.1.13', '10.0.1.14']
 ```
 
 然后生成配置：
@@ -241,10 +241,10 @@ Coordinator在容器中运行。
 ```bash
 docker run -it --rm \
   --name helix_coordinator \
-  --network helix_overlay_network \
-  --ip 10.100.0.10 \
+  --network test_heter \
+  --ip 10.0.1.10 \
   --gpus all \
-  -e HELIX_HOST_IP=10.100.0.10 \
+  -e HELIX_HOST_IP=10.0.1.10 \
   -v /mnt/lvm-data/home/dataset/sharegpt:/data \
   -v /root/Helix-ASPLOS25:/Helix-ASPLOS25 \
   myhelix:latest \
@@ -276,12 +276,12 @@ docker logs helix_worker_gpu4_4090
 
 # 测试overlay网络连通性
 # 从GPU1容器测试到其他GPU
-docker exec helix_worker_gpu1_2080ti ping -c 3 10.100.0.12  # GPU2
-docker exec helix_worker_gpu1_2080ti ping -c 3 10.100.0.13  # GPU3
-docker exec helix_worker_gpu1_2080ti ping -c 3 10.100.0.14  # GPU4
+docker exec helix_worker_gpu1_2080ti ping -c 3 10.0.1.12  # GPU2
+docker exec helix_worker_gpu1_2080ti ping -c 3 10.0.1.13  # GPU3
+docker exec helix_worker_gpu1_2080ti ping -c 3 10.0.1.14  # GPU4
 
 # 从GPU3容器测试回GPU1
-docker exec helix_worker_gpu3_4090 ping -c 3 10.100.0.11  # GPU1
+docker exec helix_worker_gpu3_4090 ping -c 3 10.0.1.11  # GPU1
 ```
 
 ### 步骤6: 查看运行结果

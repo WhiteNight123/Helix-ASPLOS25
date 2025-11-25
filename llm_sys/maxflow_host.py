@@ -158,10 +158,10 @@ def run_maxflow_host_online(
             sequence_index = 0
         
         qa_index = sequence_shuffled[sequence_index]
-        # input_length = input_tokens_list[sequence_index]
-        # output_length = output_tokens_list[sequence_index]
-        input_length = 512
-        output_length = 256
+        input_length = input_tokens_list[sequence_index]
+        output_length = output_tokens_list[sequence_index]
+        # input_length = 512
+        # output_length = 256
         input_length = min(2047, input_length)
         # Ensure total max_length doesn't exceed 2048
         if input_length + output_length > 2048:

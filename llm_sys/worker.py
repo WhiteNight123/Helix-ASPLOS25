@@ -22,7 +22,7 @@ import llm_sys.engine.qwen3
 import llm_sys.utils as utils
 
 
-def init_engine(layer_ids, model_name, vram_usage=0.85, quantization=None):
+def init_engine(layer_ids, model_name, vram_usage=0.8, quantization=None):
     """
     Initialize the pipeline stage engine.
     
@@ -123,7 +123,7 @@ def run_and_submit(engine, start_idx, end_idx, is_last_layer, hidden_size, force
     return parsed_prompt
 
 
-def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.85, quantization=None):
+def run_worker(scheduling_method: str, model_name: str, worker_ip: str = None, vram_usage=0.8, quantization=None):
     # warm up gpu and initialize llm_sys
     print("[Python] Starting worker initialization...")
     utils.warm_up()
